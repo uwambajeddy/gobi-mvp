@@ -1,0 +1,28 @@
+"use client";
+
+import { useState } from "react";
+import { SessionProvider } from "next-auth/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { Toaster } from "react-hot-toast";
+
+function Providers({ children }: { children: React.ReactNode }) {
+  const [client] = useState(
+    () =>
+      new QueryClient({
+        defaultOptions: {
+          queries: { retry: 1, refetchOnWindowFocus: false },
+        },
+      }),
+  );
+
+  return (
+    <SessionProvider>
+      <QueryClientProvider client={client}>
+        {children}
+        <Toaster position="top-right" />
+      </QueryClientProvider>
+    </SessionProvider>
+  );
+}
+
+export default Providers;
