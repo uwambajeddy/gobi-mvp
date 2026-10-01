@@ -1,0 +1,60 @@
+{
+  "name": "gobi-mvp-api",
+  "version": "1.0.0",
+  "description": "Gobi MVP: simplified logistics & delivery platform REST API (academic capstone project)",
+  "main": "server.js",
+  "directories": {
+    "test": "tests"
+  },
+  "scripts": {
+    "build": "babel src -d build && copyfiles -u 1 src/docs/swagger.json build/",
+    "start": "node build/server.js",
+    "dev": "nodemon --exec babel-node ./src/server.js",
+    "up": "npx sequelize-cli db:migrate",
+    "down": "npx sequelize-cli db:migrate:undo:all",
+    "seed": "npx sequelize-cli db:seed:all",
+    "undo-seed": "npx sequelize-cli db:seed:undo:all",
+    "test:setup": "cross-env NODE_ENV=test npm run down && cross-env NODE_ENV=test npm run up && cross-env NODE_ENV=test npm run seed",
+    "test": "cross-env NODE_ENV=test nyc mocha --require ./tests/bootstrap.js --require @babel/register ./tests/**/*.test.js --timeout 30000 --exit",
+    "test:ci": "npm run test:setup && npm test",
+    "aio": "cross-env NODE_ENV=development npm run up && cross-env NODE_ENV=development npm run seed && npm run dev"
+  },
+  "author": "Uwambaje Eddy",
+  "license": "ISC",
+  "devDependencies": {
+    "@babel/cli": "^7.14.8",
+    "@babel/core": "^7.15.0",
+    "@babel/node": "^7.14.9",
+    "@babel/plugin-transform-runtime": "^7.17.12",
+    "@babel/preset-env": "^7.15.0",
+    "@babel/register": "^7.17.7",
+    "@babel/runtime": "^7.17.9",
+    "babel-plugin-add-module-exports": "^1.0.4",
+    "babel-plugin-istanbul": "^6.1.1",
+    "babel-plugin-module-resolver": "^4.1.0",
+    "chai": "^4.3.6",
+    "chai-http": "^4.3.0",
+    "copyfiles": "^2.4.1",
+    "cross-env": "^7.0.3",
+    "mocha": "^10.0.0",
+    "nodemon": "^2.0.20",
+    "nyc": "^15.1.0",
+    "sequelize-cli": "^6.5.1"
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "chalk": "^4.1.2",
+    "compression": "^1.7.4",
+    "cookie-parser": "^1.4.6",
+    "cors": "^2.8.5",
+    "dotenv": "^16.0.2",
+    "express": "^4.18.2",
+    "joi": "^17.6.2",
+    "jsonwebtoken": "^8.5.1",
+    "morgan": "^1.10.0",
+    "pg": "^8.8.0",
+    "pg-hstore": "^2.3.4",
+    "sequelize": "^6.23.2",
+    "swagger-ui-express": "^4.5.0"
+  }
+}
