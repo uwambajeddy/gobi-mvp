@@ -1,0 +1,740 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Gobi MVP API: Operational Shipment Coordination",
+    "version": "2.0.0",
+    "description": "REST API for the Gobi MVP, an operational coordination platform for logistics companies managing domestic and cross-border freight. Shipments carry one lifecycle, one structured event timeline, a required-documents checklist with a Document Gate, a driver/vehicle Compliance Gate with audited overrides, a payments ledger, exception management and an immutable audit trail."
+  },
+  "servers": [{ "url": "http://localhost:8080" }],
+  "tags": [
+    { "name": "Auth", "description": "Registration, login and token refresh" },
+    { "name": "Profile", "description": "Current user profile" },
+    { "name": "Organizations", "description": "Company workspaces, members and roles" },
+    { "name": "Shipments", "description": "Shipment lifecycle and award flow" },
+    { "name": "Documents", "description": "Required-documents checklist and verification" },
+    { "name": "Assignment", "description": "Vehicle & driver assignment with gates" },
+    { "name": "Events", "description": "Structured operational timeline" },
+    { "name": "Payments", "description": "Operational payments ledger" },
+    { "name": "Exceptions", "description": "Incident management" },
+    { "name": "Fleet", "description": "Transport organization vehicles" },
+    { "name": "Driver", "description": "Driver licence submission" },
+    { "name": "Admin", "description": "Platform administration & audit" }
+  ],
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": { "type": "http", "scheme": "bearer", "bearerFormat": "JWT" }
+    },
+    "parameters": {
+      "activeOrg": {
+        "name": "x-organization-id",
+        "in": "header",
+        "required": false,
+        "schema": { "type": "integer" },
+        "description": "Acting organization for multi-org users; defaults to the caller's only membership."
+      },
+      "shipmentId": {
+        "name": "id",
+        "in": "path",
+        "required": true,
+        "schema": { "type": "integer" },
+        "description": "Shipment id"
+      }
+    },
+    "schemas": {
+      "ShipmentStatus": {
+        "type": "string",
+        "enum": [
+          "draft",
+          "submitted",
+          "quote_approved",
+          "awaiting_documents",
+          "documents_complete",
+          "execution_assigned",
+          "in_transit",
+          "arrived",
+          "delivered",
+          "completed",
+          "cancelled"
+        ]
+      },
+      "CompanyType": {
+        "type": "string",
+        "enum": ["distribution", "transport", "clearing_agent"]
+      },
+      "OrgRole": { "type": "string", "enum": ["owner", "coordinator", "member", "driver"] },
+      "Shipment": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer" },
+          "reference": { "type": "string", "example": "GB-2026-0002" },
+          "title": { "type": "string" },
+          "distributionOrgId": { "type": "integer" },
+          "transportOrgId": { "type": "integer", "nullable": true },
+          "clearingAgentOrgId": { "type": "integer", "nullable": true },
+          "assignedDriverId": { "type": "integer", "nullable": true },
+          "assignedVehicleId": { "type": "integer", "nullable": true },
+          "originAddress": { "type": "string" },
+          "destinationAddress": { "type": "string" },
+          "isCrossBorder": { "type": "boolean" },
+          "recipientName": { "type": "string" },
+          "recipientPhone": { "type": "string" },
+          "quoteAmount": { "type": "number", "nullable": true },
+          "status": { "$ref": "#/components/schemas/ShipmentStatus" },
+          "podRecipientName": { "type": "string", "nullable": true },
+          "podCapturedAt": { "type": "string", "format": "date-time", "nullable": true }
+        }
+      },
+      "ShipmentDocument": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer" },
+          "docType": { "type": "string", "example": "commercial_invoice" },
+          "label": { "type": "string" },
+          "mandatory": { "type": "boolean" },
+          "status": { "type": "string", "enum": ["required", "uploaded", "verified", "rejected"] },
+          "fileName": { "type": "string", "nullable": true },
+          "rejectionReason": { "type": "string", "nullable": true },
+          "expiresAt": { "type": "string", "format": "date", "nullable": true }
+        }
+      },
+      "ShipmentEvent": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer" },
+          "eventType": { "type": "string", "example": "border_cleared" },
+          "occurredAt": { "type": "string", "format": "date-time" },
+          "locationName": { "type": "string", "nullable": true },
+          "notes": { "type": "string", "nullable": true },
+          "source": { "type": "string", "enum": ["manual", "system"] },
+          "actorUserId": { "type": "integer", "nullable": true }
+        }
+      },
+      "GateResult": {
+        "type": "object",
+        "properties": {
+          "passed": { "type": "boolean" },
+          "missing": { "type": "array", "items": { "type": "object" } },
+          "failures": { "type": "array", "items": { "type": "object" } },
+          "warnings": { "type": "array", "items": { "type": "object" } }
+        }
+      },
+      "Error": {
+        "type": "object",
+        "properties": {
+          "status": { "type": "string", "example": "fail" },
+          "message": { "type": "string" }
+        }
+      }
+    },
+    "responses": {
+      "Unauthorized": { "description": "Missing or invalid access token" },
+      "Forbidden": { "description": "Caller is not permitted (role, company type or party check failed)" },
+      "NotFound": { "description": "Resource not found" },
+      "BadRequest": { "description": "Validation error or invalid lifecycle transition" }
+    }
+  },
+  "security": [{ "bearerAuth": [] }],
+  "paths": {
+    "/api/v1/auth/register": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "Register a platform user (org membership is granted separately)",
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["firstName", "lastName", "email", "password"],
+                "properties": {
+                  "firstName": { "type": "string" },
+                  "lastName": { "type": "string" },
+                  "email": { "type": "string", "format": "email" },
+                  "phoneNumber": { "type": "string" },
+                  "password": { "type": "string", "minLength": 8 }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "201": { "description": "User + token pair" }, "409": { "description": "Email in use" } }
+      }
+    },
+    "/api/v1/auth/login": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "Log in; response includes organization memberships",
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["email", "password"],
+                "properties": {
+                  "email": { "type": "string" },
+                  "password": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "200": { "description": "User + memberships + token pair" }, "401": { "$ref": "#/components/responses/Unauthorized" } }
+      }
+    },
+    "/api/v1/auth/refreshToken": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "Exchange a refresh token for a new access token",
+        "security": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "type": "object", "properties": { "refreshToken": { "type": "string" } } }
+            }
+          }
+        },
+        "responses": { "200": { "description": "New access token" } }
+      }
+    },
+    "/api/v1/profile": {
+      "get": { "tags": ["Profile"], "summary": "Current user profile", "responses": { "200": { "description": "User" } } },
+      "patch": { "tags": ["Profile"], "summary": "Update profile", "responses": { "200": { "description": "Updated user" } } }
+    },
+    "/api/v1/organizations": {
+      "post": {
+        "tags": ["Organizations"],
+        "summary": "Create an organization (creator becomes owner)",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["name", "companyType"],
+                "properties": {
+                  "name": { "type": "string" },
+                  "companyType": { "$ref": "#/components/schemas/CompanyType" }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "201": { "description": "Organization" } }
+      },
+      "get": {
+        "tags": ["Organizations"],
+        "summary": "Directory of organizations (used to pick carriers / clearing agents)",
+        "parameters": [
+          { "name": "companyType", "in": "query", "schema": { "$ref": "#/components/schemas/CompanyType" } }
+        ],
+        "responses": { "200": { "description": "Organizations" } }
+      }
+    },
+    "/api/v1/organizations/mine": {
+      "get": { "tags": ["Organizations"], "summary": "Caller's memberships", "responses": { "200": { "description": "Memberships with organizations" } } }
+    },
+    "/api/v1/organizations/{id}/members": {
+      "get": {
+        "tags": ["Organizations"],
+        "summary": "List members (members only)",
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "responses": { "200": { "description": "Members" }, "403": { "$ref": "#/components/responses/Forbidden" } }
+      },
+      "post": {
+        "tags": ["Organizations"],
+        "summary": "Add an existing user by email (owner/coordinator)",
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["email", "role"],
+                "properties": {
+                  "email": { "type": "string" },
+                  "role": { "$ref": "#/components/schemas/OrgRole" }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "201": { "description": "Membership" }, "404": { "description": "No account for email" } }
+      }
+    },
+    "/api/v1/shipments": {
+      "post": {
+        "tags": ["Shipments"],
+        "summary": "Create a draft shipment (distribution org members)",
+        "parameters": [{ "$ref": "#/components/parameters/activeOrg" }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["title", "originAddress", "destinationAddress", "packages"],
+                "properties": {
+                  "title": { "type": "string" },
+                  "originAddress": { "type": "string" },
+                  "destinationAddress": { "type": "string" },
+                  "isCrossBorder": { "type": "boolean", "default": false },
+                  "recipientName": { "type": "string" },
+                  "recipientPhone": { "type": "string" },
+                  "packages": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "required": ["description", "weightKg"],
+                      "properties": {
+                        "description": { "type": "string" },
+                        "weightKg": { "type": "number" },
+                        "quantity": { "type": "integer", "default": 1 }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "201": { "description": "Draft shipment with generated reference" } }
+      },
+      "get": {
+        "tags": ["Shipments"],
+        "summary": "Shipments visible to the caller (party orgs or assigned driver; admins see all)",
+        "parameters": [{ "name": "status", "in": "query", "schema": { "$ref": "#/components/schemas/ShipmentStatus" } }],
+        "responses": { "200": { "description": "Shipments" } }
+      }
+    },
+    "/api/v1/shipments/{id}": {
+      "get": {
+        "tags": ["Shipments"],
+        "summary": "Full workspace aggregate: shipment, documents, exceptions, caller's access context",
+        "parameters": [{ "$ref": "#/components/parameters/shipmentId" }],
+        "responses": { "200": { "description": "Aggregate" }, "403": { "$ref": "#/components/responses/Forbidden" } }
+      },
+      "patch": {
+        "tags": ["Shipments"],
+        "summary": "Edit a draft (shipper only)",
+        "parameters": [{ "$ref": "#/components/parameters/shipmentId" }],
+        "responses": { "200": { "description": "Updated shipment" }, "400": { "$ref": "#/components/responses/BadRequest" } }
+      }
+    },
+    "/api/v1/shipments/{id}/submit": {
+      "post": {
+        "tags": ["Shipments"],
+        "summary": "Submit a draft (draft → submitted)",
+        "parameters": [{ "$ref": "#/components/parameters/shipmentId" }],
+        "responses": { "200": { "description": "Submitted" } }
+      }
+    },
+    "/api/v1/shipments/{id}/cancel": {
+      "post": {
+        "tags": ["Shipments"],
+        "summary": "Cancel before transit (shipper coordinator)",
+        "parameters": [{ "$ref": "#/components/parameters/shipmentId" }],
+        "responses": { "200": { "description": "Cancelled" }, "400": { "description": "No longer cancellable" } }
+      }
+    },
+    "/api/v1/shipments/{id}/assign-carrier": {
+      "post": {
+        "tags": ["Shipments"],
+        "summary": "Assign the transport company (shipper coordinator)",
+        "parameters": [{ "$ref": "#/components/parameters/shipmentId" }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "type": "object", "required": ["transportOrgId"], "properties": { "transportOrgId": { "type": "integer" } } }
+            }
+          }
+        },
+        "responses": { "200": { "description": "Carrier assigned" } }
+      }
+    },
+    "/api/v1/shipments/{id}/assign-clearing-agent": {
+      "post": {
+        "tags": ["Shipments"],
+        "summary": "Assign the clearing agent (shipper coordinator)",
+        "parameters": [{ "$ref": "#/components/parameters/shipmentId" }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "type": "object", "required": ["clearingAgentOrgId"], "properties": { "clearingAgentOrgId": { "type": "integer" } } }
+            }
+          }
+        },
+        "responses": { "200": { "description": "Clearing agent assigned" } }
+      }
+    },
+    "/api/v1/shipments/{id}/quote": {
+      "post": {
+        "tags": ["Shipments"],
+        "summary": "Submit a quotation (assigned carrier coordinator)",
+        "parameters": [{ "$ref": "#/components/parameters/shipmentId" }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "type": "object", "required": ["amount"], "properties": { "amount": { "type": "number" }, "currency": { "type": "string", "default": "RWF" } } }
+            }
+          }
+        },
+        "responses": { "200": { "description": "Quote stored" } }
+      }
+    },
+    "/api/v1/shipments/{id}/approve-quote": {
+      "post": {
+        "tags": ["Shipments"],
+        "summary": "Approve the quote and seed the required-documents checklist (submitted → awaiting_documents)",
+        "parameters": [{ "$ref": "#/components/parameters/shipmentId" }],
+        "responses": { "200": { "description": "Approved; checklist created" } }
+      }
+    },
+    "/api/v1/shipments/{id}/documents": {
+      "get": {
+        "tags": ["Documents"],
+        "summary": "Checklist + live Document Gate result",
+        "parameters": [{ "$ref": "#/components/parameters/shipmentId" }],
+        "responses": {
+          "200": {
+            "description": "Documents + gate",
+            "content": { "application/json": { "schema": { "type": "object", "properties": { "documents": { "type": "array", "items": { "$ref": "#/components/schemas/ShipmentDocument" } }, "gate": { "$ref": "#/components/schemas/GateResult" } } } } }
+          }
+        }
+      },
+      "post": {
+        "tags": ["Documents"],
+        "summary": "Upload a document (metadata) against the checklist (any party org)",
+        "parameters": [{ "$ref": "#/components/parameters/shipmentId" }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["docType", "fileName", "fileUrl"],
+                "properties": {
+                  "docType": { "type": "string" },
+                  "fileName": { "type": "string" },
+                  "fileUrl": { "type": "string", "format": "uri" },
+                  "expiresAt": { "type": "string", "format": "date" }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "201": { "description": "Uploaded; documents phase auto-syncs" } }
+      }
+    },
+    "/api/v1/shipments/documents/{docId}/verify": {
+      "patch": {
+        "tags": ["Documents"],
+        "summary": "Verify an uploaded document (carrier coordinator)",
+        "parameters": [{ "name": "docId", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "responses": { "200": { "description": "Verified" } }
+      }
+    },
+    "/api/v1/shipments/documents/{docId}/reject": {
+      "patch": {
+        "tags": ["Documents"],
+        "summary": "Reject with a reason; may regress documents_complete → awaiting_documents",
+        "parameters": [{ "name": "docId", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "type": "object", "required": ["reason"], "properties": { "reason": { "type": "string" } } }
+            }
+          }
+        },
+        "responses": { "200": { "description": "Rejected" } }
+      }
+    },
+    "/api/v1/shipments/{id}/assignment-preview": {
+      "get": {
+        "tags": ["Assignment"],
+        "summary": "Evaluate Document + Compliance gates for a proposed vehicle/driver pairing",
+        "parameters": [
+          { "$ref": "#/components/parameters/shipmentId" },
+          { "name": "vehicleId", "in": "query", "schema": { "type": "integer" } },
+          { "name": "driverId", "in": "query", "schema": { "type": "integer" } }
+        ],
+        "responses": { "200": { "description": "documentGate + complianceGate + cargoKg" } }
+      }
+    },
+    "/api/v1/shipments/{id}/assign": {
+      "post": {
+        "tags": ["Assignment"],
+        "summary": "Assign vehicle + driver. Gates must pass or be overridden with an audited reason.",
+        "description": "Compliance checks: driver verified & licence valid; vehicle insurance/inspection valid; COMESA Yellow Card valid (cross-border); payload ≤ vehicle capacity; cargo ≤ 56,000 kg EAC GVW limit. Overrides record the exact failures, reason, actor and timestamp in the audit log and on the timeline.",
+        "parameters": [{ "$ref": "#/components/parameters/shipmentId" }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["vehicleId", "driverId"],
+                "properties": {
+                  "vehicleId": { "type": "integer" },
+                  "driverId": { "type": "integer" },
+                  "overrideDocumentGate": { "type": "boolean", "default": false },
+                  "overrideComplianceGate": { "type": "boolean", "default": false },
+                  "overrideReason": { "type": "string", "description": "Required when overriding" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Assigned (execution_assigned)" },
+          "400": { "description": "Gate failed and not overridden" }
+        }
+      }
+    },
+    "/api/v1/shipments/{id}/events": {
+      "get": {
+        "tags": ["Events"],
+        "summary": "Operational timeline (newest first)",
+        "parameters": [{ "$ref": "#/components/parameters/shipmentId" }],
+        "responses": { "200": { "description": "Events", "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/ShipmentEvent" } } } } } }
+      },
+      "post": {
+        "tags": ["Events"],
+        "summary": "Record a manual milestone (who/when/where/evidence). picked_up and arrived_destination advance the lifecycle.",
+        "parameters": [{ "$ref": "#/components/parameters/shipmentId" }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["eventType"],
+                "properties": {
+                  "eventType": { "type": "string", "example": "border_cleared" },
+                  "occurredAt": { "type": "string", "format": "date-time" },
+                  "locationName": { "type": "string" },
+                  "notes": { "type": "string" },
+                  "metadata": { "type": "object" }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "201": { "description": "Event recorded" }, "400": { "description": "Outside the operational window or invalid transition" } }
+      }
+    },
+    "/api/v1/shipments/{id}/pod": {
+      "post": {
+        "tags": ["Shipments"],
+        "summary": "Capture proof of delivery (arrived → delivered; carrier coordinator or assigned driver)",
+        "parameters": [{ "$ref": "#/components/parameters/shipmentId" }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "type": "object", "required": ["podRecipientName"], "properties": { "podRecipientName": { "type": "string" }, "podNotes": { "type": "string" } } }
+            }
+          }
+        },
+        "responses": { "200": { "description": "Delivered" } }
+      }
+    },
+    "/api/v1/shipments/{id}/complete": {
+      "post": {
+        "tags": ["Shipments"],
+        "summary": "Shipper confirms receipt (delivered → completed). Blocked while exceptions are open.",
+        "parameters": [{ "$ref": "#/components/parameters/shipmentId" }],
+        "responses": { "200": { "description": "Completed" }, "400": { "description": "Open exceptions block closure" } }
+      }
+    },
+    "/api/v1/shipments/{id}/payments": {
+      "get": {
+        "tags": ["Payments"],
+        "summary": "Payment ledger (visible to all parties)",
+        "parameters": [{ "$ref": "#/components/parameters/shipmentId" }],
+        "responses": { "200": { "description": "Payments" } }
+      },
+      "post": {
+        "tags": ["Payments"],
+        "summary": "Record an operational payment (carrier/agent coordinator). Proof marks it paid.",
+        "parameters": [{ "$ref": "#/components/parameters/shipmentId" }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["type", "amount"],
+                "properties": {
+                  "type": { "type": "string", "enum": ["delivery_order", "port_fee", "warehouse_fee", "border_fee", "customs_duty", "road_user_charge", "other"] },
+                  "amount": { "type": "number" },
+                  "currency": { "type": "string", "default": "RWF" },
+                  "proofFileName": { "type": "string" },
+                  "proofUrl": { "type": "string", "format": "uri" },
+                  "notes": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "201": { "description": "Payment recorded" } }
+      }
+    },
+    "/api/v1/shipments/payments/{paymentId}/mark-paid": {
+      "patch": {
+        "tags": ["Payments"],
+        "summary": "Settle a pending payment",
+        "parameters": [{ "name": "paymentId", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "responses": { "200": { "description": "Paid" } }
+      }
+    },
+    "/api/v1/shipments/{id}/exceptions": {
+      "get": {
+        "tags": ["Exceptions"],
+        "summary": "List exceptions",
+        "parameters": [{ "$ref": "#/components/parameters/shipmentId" }],
+        "responses": { "200": { "description": "Exceptions" } }
+      },
+      "post": {
+        "tags": ["Exceptions"],
+        "summary": "Open an exception (any party incl. the driver). Open exceptions block completion.",
+        "parameters": [{ "$ref": "#/components/parameters/shipmentId" }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["type", "notes"],
+                "properties": {
+                  "type": { "type": "string", "enum": ["breakdown", "accident", "theft", "seal_tamper", "customs_hold", "border_queue", "cargo_damage", "other"] },
+                  "severity": { "type": "string", "enum": ["low", "medium", "high", "critical"], "default": "medium" },
+                  "notes": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "201": { "description": "Exception opened" } }
+      }
+    },
+    "/api/v1/shipments/exceptions/{exceptionId}/resolve": {
+      "patch": {
+        "tags": ["Exceptions"],
+        "summary": "Resolve an exception with notes (carrier coordinator)",
+        "parameters": [{ "name": "exceptionId", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "type": "object", "required": ["resolutionNotes"], "properties": { "resolutionNotes": { "type": "string" } } }
+            }
+          }
+        },
+        "responses": { "200": { "description": "Resolved" } }
+      }
+    },
+    "/api/v1/vehicles": {
+      "get": { "tags": ["Fleet"], "summary": "Active transport org's fleet", "parameters": [{ "$ref": "#/components/parameters/activeOrg" }], "responses": { "200": { "description": "Vehicles" } } },
+      "post": {
+        "tags": ["Fleet"],
+        "summary": "Register a vehicle with compliance dates (owner/coordinator)",
+        "parameters": [{ "$ref": "#/components/parameters/activeOrg" }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["plateNumber", "model", "type"],
+                "properties": {
+                  "plateNumber": { "type": "string" },
+                  "model": { "type": "string" },
+                  "type": { "type": "string", "enum": ["truck", "van", "trailer", "pickup"] },
+                  "capacityKg": { "type": "number" },
+                  "insuranceExpiresAt": { "type": "string", "format": "date" },
+                  "inspectionExpiresAt": { "type": "string", "format": "date" },
+                  "yellowCardExpiresAt": { "type": "string", "format": "date" }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "201": { "description": "Vehicle" } }
+      }
+    },
+    "/api/v1/driver/profile": {
+      "post": {
+        "tags": ["Driver"],
+        "summary": "Submit licence for platform verification",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["licenceNumber"],
+                "properties": {
+                  "licenceNumber": { "type": "string" },
+                  "licenceExpiresAt": { "type": "string", "format": "date" }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "201": { "description": "Pending review" } }
+      },
+      "get": { "tags": ["Driver"], "summary": "Own licence status", "responses": { "200": { "description": "Driver profile or null" } } }
+    },
+    "/api/v1/admin/drivers": {
+      "get": {
+        "tags": ["Admin"],
+        "summary": "Driver profiles by review status",
+        "parameters": [{ "name": "status", "in": "query", "schema": { "type": "string", "enum": ["pending", "approved", "rejected"] } }],
+        "responses": { "200": { "description": "Driver profiles" } }
+      }
+    },
+    "/api/v1/admin/drivers/{id}": {
+      "patch": {
+        "tags": ["Admin"],
+        "summary": "Approve or reject a driver licence",
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "type": "object", "required": ["status"], "properties": { "status": { "type": "string", "enum": ["approved", "rejected"] } } }
+            }
+          }
+        },
+        "responses": { "200": { "description": "Reviewed" } }
+      }
+    },
+    "/api/v1/admin/organizations": {
+      "get": { "tags": ["Admin"], "summary": "All organizations", "responses": { "200": { "description": "Organizations" } } }
+    },
+    "/api/v1/admin/activity-logs": {
+      "get": {
+        "tags": ["Admin"],
+        "summary": "Immutable audit trail (actor, role, org, action, entity, metadata, IP)",
+        "parameters": [
+          { "name": "entityType", "in": "query", "schema": { "type": "string" } },
+          { "name": "entityId", "in": "query", "schema": { "type": "integer" } },
+          { "name": "action", "in": "query", "schema": { "type": "string" } },
+          { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 100, "maximum": 500 } }
+        ],
+        "responses": { "200": { "description": "Audit rows" } }
+      }
+    },
+    "/api/v1/admin/stats": {
+      "get": { "tags": ["Admin"], "summary": "Platform counters (users, orgs by type, shipments, open exceptions)", "responses": { "200": { "description": "Stats" } } }
+    }
+  }
+}
