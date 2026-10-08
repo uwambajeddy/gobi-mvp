@@ -6,6 +6,10 @@ Gobi is **not** a courier app, ride-hailing platform or trucking marketplace. It
 
 > **Design principle: manual first, integration ready.** Coordinators record operational events by hand today. Future GPS, customs or payment integrations write the *same* structured events automatically, so the workflow never changes.
 
+- **Repository:** https://github.com/uwambajeddy/gobi-mvp
+- **Demo video:** _link to be added_
+- **Track:** FullStack (Next.js frontend, Express + PostgreSQL backend)
+
 ## Architecture
 
 ```
@@ -94,6 +98,19 @@ draft → submitted → quote_approved → awaiting_documents ⇄ documents_comp
 
 **Structured events:** 31 typed milestones (17 system-written, 14 manually recordable: pickup, checkpoints, border approached/cleared, customs submitted/released, warehouse arrived/released, arrival...). Each records who, when, where, notes and `source: manual|system`.
 
+## Designs & screenshots
+
+The interface is a role-aware operations workspace: a fixed sidebar whose navigation changes with the acting organization (shipper, carrier, clearing agent, driver or platform admin), an "Acting as" organization switcher, and a single shipment workspace with tabs for the timeline, documents, assignment, payments and exceptions. The data model is the ER diagram above; the screens below are captured from the running app with the seeded demo data.
+
+| | |
+|---|---|
+| ![Landing page](docs/screenshots/01-landing.jpg) **Landing page** | ![Sign in](docs/screenshots/02-sign-in.jpg) **Sign in** (NextAuth credentials) |
+| ![Shipper overview](docs/screenshots/03-shipper-overview.jpg) **Shipper overview:** status counters and items needing attention | ![Shipments list](docs/screenshots/04-shipments-list.jpg) **Shipments list** filtered by lifecycle status |
+| ![New shipment](docs/screenshots/05-new-shipment.jpg) **New shipment:** cross-border toggle extends the document checklist | ![Shipment timeline](docs/screenshots/06-shipment-timeline.jpg) **Structured timeline:** manual and system events on the corridor |
+| ![Document gate](docs/screenshots/07-document-gate.jpg) **Document Gate:** assignment blocked until mandatory documents are verified | ![Coordinator overview](docs/screenshots/08-coordinator-overview.jpg) **Coordinator overview** (carrier side, with Fleet in the nav) |
+| ![Shipment assignment](docs/screenshots/09-shipment-assignment.jpg) **Shipment workspace:** route, parties, execution and recipient | ![Fleet compliance](docs/screenshots/10-fleet-compliance.jpg) **Fleet:** insurance, inspection and Yellow Card expiry feed the Compliance Gate |
+| ![Admin dashboard](docs/screenshots/11-admin-dashboard.jpg) **Platform admin dashboard** | ![Swagger API docs](docs/screenshots/12-swagger-api-docs.jpg) **Swagger UI** for the REST API |
+
 ## Getting started
 
 Prerequisites: Node.js 18+, Docker Desktop.
@@ -177,6 +194,43 @@ Multi-org users select their acting organization with the `x-organization-id` he
 **Backend:** Express 4, Sequelize 6 (PostgreSQL), JWT auth with organization-scoped RBAC, Joi validation, service-layer gates (document / compliance), immutable `activity_logs`, Swagger UI, Babel, Mocha + Chai + chai-http + nyc.
 
 **Frontend:** Next.js 14 App Router, TypeScript, Tailwind CSS, NextAuth (credentials), TanStack React Query, React Hook Form + Zod, Axios with org-context header, Lucide icons.
+
+**Tooling:** Docker Compose (PostgreSQL 16 with separate dev and test databases), sequelize-cli migrations and seeders, nodemon, ESLint (`next lint`), Git + GitHub with feature branches merged into `main`.
+
+## Testing
+
+```bash
+cd api
+npm run test:ci   # resets gobi_mvp_test (migrate + seed), then runs Mocha with nyc coverage
+```
+
+The suite covers auth, organizations and RBAC, the shipment lifecycle, document and compliance gates (including audited overrides), operations (events, payments, exceptions, POD and closure) and the admin endpoints.
+
+Current result: **43 passing**, with 77% statement and 80% line coverage. The web app is verified with a production build (`cd web && npm run build`).
+
+## Deployment plan
+
+The MVP currently runs locally (Docker Compose for PostgreSQL, Node for the API and web app). Production deployment uses three managed services, chosen so each part deploys from this repository with no custom infrastructure:
+
+| Component | Platform | Build / start | Configuration |
+|---|---|---|---|
+| PostgreSQL | Managed Postgres (Render or Neon) | n/a | SSL is already required by the `production` Sequelize config |
+| API (`api/`) | Render web service, Node 18+ | `npm ci && npm run build` / `npm start` | `NODE_ENV=production`, `DATABASE_URL`, `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`, `JWT_ACCESS_TIME`, `JWT_REFRESH_TIME` |
+| Web (`web/`) | Vercel (native Next.js hosting) | `npm run build` (automatic) | `NEXT_PUBLIC_API_URL` (API URL), `NEXTAUTH_URL` (web URL), `NEXTAUTH_SECRET` |
+
+**Release steps**
+
+1. Provision the database and copy its connection string into the API's `DATABASE_URL`.
+2. Deploy the API, then run migrations as a release step: `NODE_ENV=production npx sequelize-cli db:migrate`. Seed (`npm run seed`) only on a demo environment, never on real data.
+3. Deploy the web app with `NEXT_PUBLIC_API_URL` pointing at the API and a freshly generated `NEXTAUTH_SECRET`.
+4. Smoke test: open `/api/v1/docs`, sign in as each persona and run the demo walkthrough above.
+
+**Before real users**
+
+- Add a GitHub Actions workflow that runs `npm run test:ci` against a Postgres service container and `npm run build` for the web app on every pull request.
+- Restrict CORS on the API to the web app's origin (it is open for local development).
+- Store document files in object storage (S3 or Cloudinary). The API already records document metadata and a `fileUrl`, so only the upload step changes.
+- Generate long random JWT and NextAuth secrets per environment, and enable automated database backups.
 
 ## License
 
