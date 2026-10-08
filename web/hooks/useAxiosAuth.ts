@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { signIn, useSession } from "next-auth/react";
+import { getSession, signIn, useSession } from "next-auth/react";
 import axiosAuth from "@/lib/axios";
 
 /**
@@ -14,9 +14,15 @@ const useAxiosAuth = () => {
 
   useEffect(() => {
     const requestIntercept = axiosAuth.interceptors.request.use(
-      (config) => {
-        if (!config.headers["Authorization"] && session?.tokens?.accessToken) {
-          config.headers["Authorization"] = `Bearer ${session.tokens.accessToken}`;
+      async (config) => {
+        if (!config.headers["Authorization"]) {
+          // On a full page load queries can fire while useSession() is still
+          // loading; wait for the session instead of sending an anonymous request.
+          const accessToken =
+            session?.tokens?.accessToken ?? (await getSession())?.tokens?.accessToken;
+          if (accessToken) {
+            config.headers["Authorization"] = `Bearer ${accessToken}`;
+          }
         }
         return config;
       },
