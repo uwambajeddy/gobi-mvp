@@ -7,7 +7,7 @@ Gobi is **not** a courier app, ride-hailing platform or trucking marketplace. It
 > **Design principle: manual first, integration ready.** Coordinators record operational events by hand today. Future GPS, customs or payment integrations write the *same* structured events automatically, so the workflow never changes.
 
 - **Repository:** https://github.com/uwambajeddy/gobi-mvp
-- **Demo video:** _link to be added_
+- **Demo video:** https://youtu.be/02J0hHaTpfQ
 - **Track:** FullStack (Next.js frontend, Express + PostgreSQL backend)
 
 ## Architecture
