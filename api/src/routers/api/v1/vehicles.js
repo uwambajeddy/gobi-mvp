@@ -13,10 +13,12 @@ import {
   requireOrgRole,
 } from "../../../middlewares/organizationAuthorization";
 import { validate } from "../../../middlewares/validate";
+import { validateIdParams } from "../../../middlewares/validateId";
 import { vehicleSchema, updateVehicleSchema } from "../../../utils/validationSchemas";
 
 const router = express.Router();
 
+validateIdParams(router, "id");
 router.use(protect, requireMembership, requireCompanyType("transport"));
 
 router.get("/", listVehicles);

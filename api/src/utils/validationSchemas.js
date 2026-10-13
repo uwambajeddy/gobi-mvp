@@ -1,6 +1,17 @@
 import Joi from "joi";
 import { DOCUMENT_TYPE_KEYS } from "../config/shipmentDocuments";
 import { MANUAL_EVENT_TYPES } from "../config/shipmentEvents";
+import { SHIPMENT_STATUSES } from "../config/shipmentLifecycle";
+import { MAX_ID } from "../middlewares/validateId";
+
+const id = () => Joi.number().integer().positive().max(MAX_ID);
+
+const COMPANY_TYPES = ["distribution", "transport", "clearing_agent"];
+const DRIVER_PROFILE_STATUSES = ["pending", "approved", "rejected"];
+
+export const shipmentFilters = { status: SHIPMENT_STATUSES };
+export const organizationFilters = { companyType: COMPANY_TYPES };
+export const driverProfileFilters = { status: DRIVER_PROFILE_STATUSES };
 
 export const registerSchema = Joi.object({
   firstName: Joi.string().trim().min(2).max(50).required(),
@@ -11,7 +22,21 @@ export const registerSchema = Joi.object({
     .pattern(/^\+?[0-9]{9,15}$/)
     .messages({ "string.pattern.base": "phoneNumber must be a valid phone number" }),
   password: Joi.string().min(8).max(72).required(),
+  inviteToken: Joi.string().trim().hex().length(64),
 });
+
+const verificationId = Joi.string().trim().hex().length(48).required();
+
+export const verifyEmailSchema = Joi.object({
+  verificationId,
+  code: Joi.string()
+    .trim()
+    .pattern(/^\d{6}$/)
+    .required()
+    .messages({ "string.pattern.base": "Enter the 6-digit code from the email" }),
+});
+
+export const resendVerificationSchema = Joi.object({ verificationId });
 
 export const loginSchema = Joi.object({
   email: Joi.string().trim().lowercase().email().required(),
@@ -34,7 +59,7 @@ export const changePasswordSchema = Joi.object({
 
 export const createOrganizationSchema = Joi.object({
   name: Joi.string().trim().min(2).max(120).required(),
-  companyType: Joi.string().valid("distribution", "transport", "clearing_agent").required(),
+  companyType: Joi.string().valid(...COMPANY_TYPES).required(),
   contactEmail: Joi.string().trim().lowercase().email(),
   contactPhone: Joi.string().trim().max(20),
   address: Joi.string().trim().max(255),
@@ -76,11 +101,11 @@ export const updateShipmentSchema = Joi.object({
 }).min(1);
 
 export const assignCarrierSchema = Joi.object({
-  transportOrgId: Joi.number().integer().positive().required(),
+  transportOrgId: id().required(),
 });
 
 export const assignClearingAgentSchema = Joi.object({
-  clearingAgentOrgId: Joi.number().integer().positive().required(),
+  clearingAgentOrgId: id().required(),
 });
 
 export const submitQuoteSchema = Joi.object({
@@ -92,8 +117,6 @@ export const uploadDocumentSchema = Joi.object({
   docType: Joi.string()
     .valid(...DOCUMENT_TYPE_KEYS)
     .required(),
-  fileName: Joi.string().trim().min(1).max(255).required(),
-  fileUrl: Joi.string().trim().uri().required(),
   expiresAt: Joi.date().iso(),
 });
 
@@ -102,8 +125,8 @@ export const rejectDocumentSchema = Joi.object({
 });
 
 export const assignExecutionSchema = Joi.object({
-  vehicleId: Joi.number().integer().positive().required(),
-  driverId: Joi.number().integer().positive().required(),
+  vehicleId: id().required(),
+  driverId: id().required(),
   overrideDocumentGate: Joi.boolean().default(false),
   overrideComplianceGate: Joi.boolean().default(false),
   overrideReason: Joi.string().trim().min(5).max(500),
@@ -143,8 +166,6 @@ export const recordPaymentSchema = Joi.object({
     .required(),
   amount: Joi.number().positive().required(),
   currency: Joi.string().trim().uppercase().length(3).default("RWF"),
-  proofFileName: Joi.string().trim().max(255),
-  proofUrl: Joi.string().trim().uri(),
   notes: Joi.string().trim().max(1000).allow(""),
 });
 
