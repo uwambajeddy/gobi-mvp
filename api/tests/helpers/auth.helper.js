@@ -1,6 +1,8 @@
 import chai from "chai";
 import chaiHttp from "chai-http";
 import app from "../../src/app";
+import { testOutbox } from "../../src/services/email.service";
+import { flushNotifications } from "../../src/services/notifications.service";
 
 chai.use(chaiHttp);
 
@@ -32,7 +34,12 @@ let emailCounter = 0;
 export const uniqueEmail = (prefix = "user") =>
   `${prefix}.${Date.now()}.${(emailCounter += 1)}@test.gobi.rw`;
 
-/** Registers a fresh platform user via the API. */
+export const verificationCodeFor = async (email) => {
+  await flushNotifications();
+  const message = [...testOutbox].reverse().find((m) => m.to.email === email && m.tag === "verify_email");
+  return message?.text.match(/Your code: (\d{6})/)?.[1];
+};
+
 export const registerUser = async (overrides = {}) => {
   const body = {
     firstName: "Test",
@@ -43,11 +50,22 @@ export const registerUser = async (overrides = {}) => {
     ...overrides,
   };
 
-  const res = await chai.request(app).post("/api/v1/auth/register").send(body);
-  if (res.status !== 201) {
-    throw new Error(`Test user registration failed: ${JSON.stringify(res.body)}`);
+  const started = await chai.request(app).post("/api/v1/auth/register").send(body);
+  if (started.status !== 201) {
+    throw new Error(`Test user registration failed: ${JSON.stringify(started.body)}`);
   }
-  return { ...res.body.data, password: body.password };
+  if (started.body.data.user) {
+    return { ...(await loginAs(body.email, body.password)), password: body.password };
+  }
+
+  const verified = await chai.request(app).post("/api/v1/auth/verify-email").send({
+    verificationId: started.body.data.verification.id,
+    code: await verificationCodeFor(body.email),
+  });
+  if (verified.status !== 201) {
+    throw new Error(`Test email verification failed: ${JSON.stringify(verified.body)}`);
+  }
+  return { ...verified.body.data, password: body.password };
 };
 
 export const loginAs = async (email, password = PASSWORD) => {
