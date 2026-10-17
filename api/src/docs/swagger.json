@@ -93,6 +93,9 @@
           "mandatory": { "type": "boolean" },
           "status": { "type": "string", "enum": ["required", "uploaded", "verified", "rejected"] },
           "fileName": { "type": "string", "nullable": true },
+          "hasFile": { "type": "boolean", "description": "A file is stored; fetch it via /shipments/documents/{docId}/file" },
+          "fileMimeType": { "type": "string", "nullable": true },
+          "fileSize": { "type": "integer", "nullable": true },
           "rejectionReason": { "type": "string", "nullable": true },
           "expiresAt": { "type": "string", "format": "date", "nullable": true }
         }
@@ -138,7 +141,8 @@
     "/api/v1/auth/register": {
       "post": {
         "tags": ["Auth"],
-        "summary": "Register a platform user (org membership is granted separately)",
+        "summary": "Start a sign-up; the account is created once the email is verified",
+        "description": "Emails a 6-digit code and returns a `verification` handle for POST /auth/verify-email; no account exists yet. With an `inviteToken` for the same email, the invitation proves the inbox and the `user` is created at once (sign in to get tokens). Organization membership is granted separately.",
         "security": [],
         "requestBody": {
           "required": true,
@@ -152,13 +156,66 @@
                   "lastName": { "type": "string" },
                   "email": { "type": "string", "format": "email" },
                   "phoneNumber": { "type": "string" },
-                  "password": { "type": "string", "minLength": 8 }
+                  "password": { "type": "string", "minLength": 8 },
+                  "inviteToken": { "type": "string", "description": "Token from an emailed invitation link" }
                 }
               }
             }
           }
         },
-        "responses": { "201": { "description": "User + token pair" }, "409": { "description": "Email in use" } }
+        "responses": {
+          "201": { "description": "`verification` { id, email, expiresAt, resendAvailableAt }, or `user` when created from an invitation" },
+          "409": { "description": "Email in use" }
+        }
+      }
+    },
+    "/api/v1/auth/verify-email": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "Confirm the emailed code and create the account",
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["verificationId", "code"],
+                "properties": {
+                  "verificationId": { "type": "string" },
+                  "code": { "type": "string", "pattern": "^\\d{6}$" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "User + token pair" },
+          "400": { "description": "Wrong code (the message says how many tries are left)" },
+          "404": { "description": "Sign-up expired or already completed" },
+          "409": { "description": "Another sign-up for this email finished first" },
+          "429": { "description": "Five wrong codes; request a new one" }
+        }
+      }
+    },
+    "/api/v1/auth/resend-verification": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "Email a new code for a pending sign-up (at most every 30 seconds)",
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "type": "object", "required": ["verificationId"], "properties": { "verificationId": { "type": "string" } } }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "New code sent; the old one stops working" },
+          "404": { "description": "Sign-up expired or already completed" },
+          "429": { "description": "Asked again too soon" }
+        }
       }
     },
     "/api/v1/auth/login": {
@@ -245,7 +302,8 @@
       },
       "post": {
         "tags": ["Organizations"],
-        "summary": "Add an existing user by email (owner/coordinator)",
+        "summary": "Add someone by email (owner/coordinator): existing users join now, others get an emailed invitation",
+        "description": "Responds with `member` when the email has a Gobi account, or `invitation` (plus `resent`) when it doesn't. Repeating it for an open invitation sends a fresh link and updates the role. Only an owner can add or invite another owner (403 for coordinators).",
         "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }],
         "requestBody": {
           "required": true,
@@ -262,7 +320,61 @@
             }
           }
         },
-        "responses": { "201": { "description": "Membership" }, "404": { "description": "No account for email" } }
+        "responses": {
+          "201": { "description": "Membership created, or invitation sent" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "409": { "description": "Already a member" }
+        }
+      }
+    },
+    "/api/v1/organizations/{id}/invitations": {
+      "get": {
+        "tags": ["Organizations"],
+        "summary": "Open invitations, pending or expired (owner/coordinator)",
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "responses": { "200": { "description": "Invitations" }, "403": { "$ref": "#/components/responses/Forbidden" } }
+      }
+    },
+    "/api/v1/organizations/{id}/invitations/{invitationId}": {
+      "delete": {
+        "tags": ["Organizations"],
+        "summary": "Revoke an open invitation (owner/coordinator)",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } },
+          { "name": "invitationId", "in": "path", "required": true, "schema": { "type": "integer" } }
+        ],
+        "responses": {
+          "200": { "description": "Revoked; the link stops working" },
+          "400": { "description": "Already accepted or revoked" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": { "description": "Invitation not found" }
+        }
+      }
+    },
+    "/api/v1/invitations/{token}": {
+      "get": {
+        "tags": ["Organizations"],
+        "summary": "Public preview of an emailed invitation link",
+        "security": [],
+        "parameters": [{ "name": "token", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": {
+          "200": { "description": "Invitation (organization, role, inviter, status) and whether the email already has an account" },
+          "404": { "description": "Unknown or replaced link" }
+        }
+      }
+    },
+    "/api/v1/invitations/{token}/accept": {
+      "post": {
+        "tags": ["Organizations"],
+        "summary": "Accept an invitation (signed in with the invited email)",
+        "parameters": [{ "name": "token", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": {
+          "200": { "description": "Joined; returns the membership" },
+          "400": { "description": "Expired or revoked" },
+          "403": { "description": "Signed in with a different email" },
+          "404": { "description": "Unknown or replaced link" },
+          "409": { "description": "Already accepted" }
+        }
       }
     },
     "/api/v1/shipments": {
@@ -305,7 +417,7 @@
       },
       "get": {
         "tags": ["Shipments"],
-        "summary": "Shipments visible to the caller (party orgs or assigned driver; admins see all)",
+        "summary": "Shipments visible to the caller (party orgs via owner/coordinator/member roles; drivers see only their own assignments; admins see all)",
         "parameters": [{ "name": "status", "in": "query", "schema": { "$ref": "#/components/schemas/ShipmentStatus" } }],
         "responses": { "200": { "description": "Shipments" } }
       }
@@ -343,7 +455,7 @@
     "/api/v1/shipments/{id}/assign-carrier": {
       "post": {
         "tags": ["Shipments"],
-        "summary": "Assign the transport company (shipper coordinator)",
+        "summary": "Assign the transport company (shipper coordinator). Changing the carrier clears the previous carrier's quote.",
         "parameters": [{ "$ref": "#/components/parameters/shipmentId" }],
         "requestBody": {
           "required": true,
@@ -410,26 +522,46 @@
       },
       "post": {
         "tags": ["Documents"],
-        "summary": "Upload a document (metadata) against the checklist (any party org)",
+        "summary": "Upload a document file against the checklist (any party org member, or the assigned driver)",
+        "description": "Multipart upload. The file (PDF, JPG or PNG, max 10 MB, checked by content) is stored privately in Cloudinary.",
         "parameters": [{ "$ref": "#/components/parameters/shipmentId" }],
         "requestBody": {
           "required": true,
           "content": {
-            "application/json": {
+            "multipart/form-data": {
               "schema": {
                 "type": "object",
-                "required": ["docType", "fileName", "fileUrl"],
+                "required": ["docType", "file"],
                 "properties": {
                   "docType": { "type": "string" },
-                  "fileName": { "type": "string" },
-                  "fileUrl": { "type": "string", "format": "uri" },
+                  "file": { "type": "string", "format": "binary" },
                   "expiresAt": { "type": "string", "format": "date" }
                 }
               }
             }
           }
         },
-        "responses": { "201": { "description": "Uploaded; documents phase auto-syncs" } }
+        "responses": {
+          "201": { "description": "Uploaded; documents phase auto-syncs" },
+          "400": { "description": "No file, unsupported type, content mismatch or over 10 MB" },
+          "502": { "description": "The file could not be stored" },
+          "503": { "description": "File storage is not configured" }
+        }
+      }
+    },
+    "/api/v1/shipments/documents/{docId}/file": {
+      "get": {
+        "tags": ["Documents"],
+        "summary": "Short-lived link to view a stored document file (any shipment party)",
+        "parameters": [{ "name": "docId", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "responses": {
+          "200": {
+            "description": "Signed link, valid for 5 minutes",
+            "content": { "application/json": { "schema": { "type": "object", "properties": { "url": { "type": "string", "format": "uri" }, "expiresAt": { "type": "string", "format": "date-time" }, "fileName": { "type": "string" }, "mimeType": { "type": "string" }, "fileSize": { "type": "integer" } } } } }
+          },
+          "403": { "description": "Not a party to the shipment" },
+          "404": { "description": "Document not found, or no file stored" }
+        }
       }
     },
     "/api/v1/shipments/documents/{docId}/verify": {
@@ -459,7 +591,7 @@
     "/api/v1/shipments/{id}/assignment-preview": {
       "get": {
         "tags": ["Assignment"],
-        "summary": "Evaluate Document + Compliance gates for a proposed vehicle/driver pairing",
+        "summary": "Evaluate Document + Compliance gates for a proposed vehicle/driver pairing from the shipment carrier's own fleet (other ids: 400)",
         "parameters": [
           { "$ref": "#/components/parameters/shipmentId" },
           { "name": "vehicleId", "in": "query", "schema": { "type": "integer" } },
@@ -507,7 +639,7 @@
       },
       "post": {
         "tags": ["Events"],
-        "summary": "Record a manual milestone (who/when/where/evidence). picked_up and arrived_destination advance the lifecycle.",
+        "summary": "Record a manual milestone (who/when/where/evidence). picked_up and arrived_destination advance the lifecycle and are limited to carrier owners/coordinators and the assigned driver.",
         "parameters": [{ "$ref": "#/components/parameters/shipmentId" }],
         "requestBody": {
           "required": true,
@@ -557,13 +689,14 @@
     "/api/v1/shipments/{id}/payments": {
       "get": {
         "tags": ["Payments"],
-        "summary": "Payment ledger (visible to all parties)",
+        "summary": "Payment ledger (shipper, carrier and agent members, admins; not drivers)",
         "parameters": [{ "$ref": "#/components/parameters/shipmentId" }],
         "responses": { "200": { "description": "Payments" } }
       },
       "post": {
         "tags": ["Payments"],
         "summary": "Record an operational payment (carrier/agent coordinator). Proof marks it paid.",
+        "description": "JSON, or multipart with an optional proof file (PDF, JPG or PNG, max 10 MB, checked by content) stored privately in Cloudinary.",
         "parameters": [{ "$ref": "#/components/parameters/shipmentId" }],
         "requestBody": {
           "required": true,
@@ -576,21 +709,72 @@
                   "type": { "type": "string", "enum": ["delivery_order", "port_fee", "warehouse_fee", "border_fee", "customs_duty", "road_user_charge", "other"] },
                   "amount": { "type": "number" },
                   "currency": { "type": "string", "default": "RWF" },
-                  "proofFileName": { "type": "string" },
-                  "proofUrl": { "type": "string", "format": "uri" },
                   "notes": { "type": "string" }
+                }
+              }
+            },
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": ["type", "amount"],
+                "properties": {
+                  "type": { "type": "string", "enum": ["delivery_order", "port_fee", "warehouse_fee", "border_fee", "customs_duty", "road_user_charge", "other"] },
+                  "amount": { "type": "number" },
+                  "currency": { "type": "string", "default": "RWF" },
+                  "notes": { "type": "string" },
+                  "file": { "type": "string", "format": "binary", "description": "Optional proof of payment" }
                 }
               }
             }
           }
         },
-        "responses": { "201": { "description": "Payment recorded" } }
+        "responses": {
+          "201": { "description": "Payment recorded (paid when a proof file is attached)" },
+          "400": { "description": "Invalid fields, unsupported proof type, content mismatch or over 10 MB" },
+          "502": { "description": "The proof file could not be stored" },
+          "503": { "description": "File storage is not configured" }
+        }
+      }
+    },
+    "/api/v1/shipments/payments/{paymentId}/proof": {
+      "get": {
+        "tags": ["Payments"],
+        "summary": "Short-lived link to view a payment's proof file (shipper, carrier and agent members, admins; not drivers)",
+        "parameters": [{ "name": "paymentId", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "responses": {
+          "200": {
+            "description": "Signed link, valid for 5 minutes",
+            "content": { "application/json": { "schema": { "type": "object", "properties": { "url": { "type": "string", "format": "uri" }, "expiresAt": { "type": "string", "format": "date-time" }, "fileName": { "type": "string" }, "mimeType": { "type": "string" }, "fileSize": { "type": "integer" } } } } }
+          },
+          "403": { "description": "Not a party to the shipment" },
+          "404": { "description": "Payment not found, or no proof file stored" }
+        }
+      },
+      "post": {
+        "tags": ["Payments"],
+        "summary": "Upload the proof file for a payment (carrier/agent coordinator); settles it",
+        "parameters": [{ "name": "paymentId", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": { "type": "object", "required": ["file"], "properties": { "file": { "type": "string", "format": "binary" } } }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Proof attached; the payment is paid" },
+          "400": { "description": "No file, unsupported type, content mismatch or over 10 MB" },
+          "403": { "description": "Not a carrier or clearing-agent coordinator on the shipment" },
+          "502": { "description": "The proof file could not be stored" },
+          "503": { "description": "File storage is not configured" }
+        }
       }
     },
     "/api/v1/shipments/payments/{paymentId}/mark-paid": {
       "patch": {
         "tags": ["Payments"],
-        "summary": "Settle a pending payment",
+        "summary": "Settle a pending payment without a proof file",
         "parameters": [{ "name": "paymentId", "in": "path", "required": true, "schema": { "type": "integer" } }],
         "responses": { "200": { "description": "Paid" } }
       }
