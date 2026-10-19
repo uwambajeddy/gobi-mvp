@@ -1,11 +1,11 @@
 import { Badge } from "@/components/ui/badge";
 import { SHIPMENT_STATUS_LABELS } from "@/lib/labels";
+import { capitalize } from "@/lib/utils";
 import { DocumentStatus, ExceptionStatus, PaymentStatus, ShipmentStatus } from "@/types";
 
-const shipmentVariants: Record<
-  ShipmentStatus,
-  "secondary" | "info" | "warning" | "success" | "destructive" | "default"
-> = {
+type Variant = "secondary" | "info" | "warning" | "success" | "destructive" | "default";
+
+export const shipmentStatusVariant: Record<ShipmentStatus, Variant> = {
   draft: "secondary",
   submitted: "info",
   quote_approved: "info",
@@ -19,34 +19,47 @@ const shipmentVariants: Record<
   cancelled: "destructive",
 };
 
-export function ShipmentStatusBadge({ status }: { status: ShipmentStatus }) {
-  return <Badge variant={shipmentVariants[status]}>{SHIPMENT_STATUS_LABELS[status]}</Badge>;
+export function ShipmentStatusBadge({ status, className }: { status: ShipmentStatus; className?: string }) {
+  return (
+    <Badge dot variant={shipmentStatusVariant[status]} className={className}>
+      {SHIPMENT_STATUS_LABELS[status]}
+    </Badge>
+  );
 }
 
-const documentVariants: Record<DocumentStatus, "secondary" | "info" | "success" | "destructive"> = {
+const documentVariants: Record<DocumentStatus, Variant> = {
   required: "secondary",
   uploaded: "info",
   verified: "success",
   rejected: "destructive",
 };
 
+// "required" is the API's state for "nothing uploaded yet"; it also applies
+// to optional documents, so the label describes the state instead.
+const documentLabels: Record<DocumentStatus, string> = {
+  required: "Not uploaded",
+  uploaded: "Uploaded",
+  verified: "Verified",
+  rejected: "Rejected",
+};
+
 export function DocumentStatusBadge({ status }: { status: DocumentStatus }) {
   return (
-    <Badge variant={documentVariants[status]}>
-      {status.charAt(0).toUpperCase() + status.slice(1)}
+    <Badge dot variant={documentVariants[status]}>
+      {documentLabels[status]}
     </Badge>
   );
 }
 
 export function PaymentStatusBadge({ status }: { status: PaymentStatus }) {
   return (
-    <Badge variant={status === "paid" ? "success" : "warning"}>
+    <Badge dot variant={status === "paid" ? "success" : "warning"}>
       {status === "paid" ? "Paid" : "Pending"}
     </Badge>
   );
 }
 
-const exceptionVariants: Record<ExceptionStatus, "destructive" | "warning" | "success"> = {
+const exceptionVariants: Record<ExceptionStatus, Variant> = {
   open: "destructive",
   investigating: "warning",
   resolved: "success",
@@ -54,8 +67,8 @@ const exceptionVariants: Record<ExceptionStatus, "destructive" | "warning" | "su
 
 export function ExceptionStatusBadge({ status }: { status: ExceptionStatus }) {
   return (
-    <Badge variant={exceptionVariants[status]}>
-      {status.charAt(0).toUpperCase() + status.slice(1)}
+    <Badge dot variant={exceptionVariants[status]}>
+      {capitalize(status)}
     </Badge>
   );
 }
@@ -67,5 +80,16 @@ export function SeverityBadge({ severity }: { severity: string }) {
       : severity === "medium"
         ? "warning"
         : "secondary";
-  return <Badge variant={variant}>{severity.charAt(0).toUpperCase() + severity.slice(1)}</Badge>;
+  return <Badge variant={variant}>{capitalize(severity)} severity</Badge>;
+}
+
+export function DriverStatusBadge({ status }: { status: "pending" | "approved" | "rejected" }) {
+  return (
+    <Badge
+      dot
+      variant={status === "approved" ? "success" : status === "rejected" ? "destructive" : "warning"}
+    >
+      {capitalize(status)}
+    </Badge>
+  );
 }
