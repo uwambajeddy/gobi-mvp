@@ -20,6 +20,8 @@ const writeCookie = (orgId: number) => {
   document.cookie = `${ACTIVE_ORG_COOKIE}=${orgId}; path=/; max-age=${60 * 60 * 24 * 365}`;
 };
 
+export const rememberActiveOrg = writeCookie;
+
 export function useActiveOrg() {
   const axios = useAxiosAuth();
   const { status } = useSession();
