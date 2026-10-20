@@ -45,6 +45,19 @@ export interface Membership {
   organization?: Organization;
 }
 
+export interface OrgInvitation {
+  id: number;
+  organizationId: number;
+  email: string;
+  role: OrgRole;
+  status: "pending" | "expired" | "accepted" | "revoked";
+  expiresAt: string;
+  createdAt: string;
+  updatedAt: string;
+  organization?: Pick<Organization, "id" | "name" | "companyType">;
+  invitedBy?: Pick<UserSummary, "id" | "firstName" | "lastName"> | null;
+}
+
 export interface User {
   id: number;
   firstName: string;
@@ -140,7 +153,9 @@ export interface ShipmentDocument {
   label: string;
   mandatory: boolean;
   fileName?: string | null;
-  fileUrl?: string | null;
+  hasFile?: boolean;
+  fileMimeType?: string | null;
+  fileSize?: number | null;
   status: DocumentStatus;
   rejectionReason?: string | null;
   uploadedByUserId?: number | null;
@@ -171,11 +186,14 @@ export interface ShipmentPayment {
   currency: string;
   status: PaymentStatus;
   proofFileName?: string | null;
-  proofUrl?: string | null;
+  hasProof?: boolean;
+  proofMimeType?: string | null;
+  proofFileSize?: number | null;
   notes?: string | null;
   recordedBy?: UserSummary;
   paidAt?: string | null;
   createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface ShipmentException {
@@ -202,6 +220,7 @@ export interface ShipmentAccess {
   isCarrierCoordinator: boolean;
   isAgentCoordinator: boolean;
   isParty: boolean;
+  can?: Record<string, boolean>;
 }
 
 export interface DocumentGateResult {
