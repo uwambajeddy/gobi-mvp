@@ -6,15 +6,34 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import toast from "react-hot-toast";
-import { Pencil, Plus, Trash2, Truck } from "lucide-react";
+import {
+  AlertTriangle,
+  CalendarClock,
+  CheckCircle2,
+  CircleDashed,
+  Pencil,
+  Plus,
+  ShieldAlert,
+  ShieldCheck,
+  Trash2,
+  Truck,
+  XCircle,
+} from "lucide-react";
 import useAxiosAuth from "@/hooks/useAxiosAuth";
 import { useActiveOrg } from "@/hooks/useActiveOrg";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Select } from "@/components/ui/select";
+import { Field } from "@/components/ui/field";
+import { ConfirmDialog, Dialog } from "@/components/ui/dialog";
+import { Skeleton } from "@/components/ui/feedback";
+import { PageHeader } from "@/components/common/PageHeader";
+import { StatCard } from "@/components/common/StatCard";
+import { EmptyState, ErrorState } from "@/components/common/States";
 import { handleApiError } from "@/lib/handleApiError";
+import { cn, formatDate } from "@/lib/utils";
 import { Vehicle } from "@/types";
 
 const vehicleSchema = z.object({
@@ -36,14 +55,125 @@ const TYPE_LABELS: Record<Vehicle["type"], string> = {
   pickup: "Pickup",
 };
 
-const isExpired = (date?: string | null) => date && new Date(date) < new Date();
+const SOON_DAYS = 30;
+const isExpired = (date?: string | null) => Boolean(date && new Date(date) < new Date());
 
-function ComplianceChip({ label, date }: { label: string; date?: string | null }) {
-  if (!date) return <Badge variant="secondary">{label}: not on file</Badge>;
+type DocState = "valid" | "soon" | "expired" | "missing";
+
+const docState = (date?: string | null): DocState => {
+  if (!date) return "missing";
+  if (isExpired(date)) return "expired";
+  const days = (new Date(date).getTime() - Date.now()) / 86_400_000;
+  return days <= SOON_DAYS ? "soon" : "valid";
+};
+
+const DOC_STATE_UI: Record<DocState, { label: string; icon: typeof CheckCircle2; className: string }> = {
+  valid: { label: "Valid", icon: CheckCircle2, className: "text-success-fg" },
+  soon: { label: `Expires within ${SOON_DAYS} days`, icon: CalendarClock, className: "text-warning-fg" },
+  expired: { label: "Expired", icon: XCircle, className: "text-danger-fg" },
+  missing: { label: "Not on file", icon: CircleDashed, className: "text-ink-muted" },
+};
+
+const COMPLIANCE_DOCS: { key: keyof Vehicle; label: string }[] = [
+  { key: "insuranceExpiresAt", label: "Insurance" },
+  { key: "inspectionExpiresAt", label: "Inspection" },
+  { key: "yellowCardExpiresAt", label: "COMESA Yellow Card" },
+];
+
+const vehicleHealth = (vehicle: Vehicle) => {
+  const states = COMPLIANCE_DOCS.map(({ key }) => docState(vehicle[key] as string | null));
+  if (states.includes("expired")) return "expired" as const;
+  if (states.includes("missing")) return "incomplete" as const;
+  return "valid" as const;
+};
+
+function VehicleCard({
+  vehicle,
+  canManage,
+  onEdit,
+  onDelete,
+}: {
+  vehicle: Vehicle;
+  canManage: boolean;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
+  const health = vehicleHealth(vehicle);
   return (
-    <Badge variant={isExpired(date) ? "destructive" : "success"}>
-      {label}: {isExpired(date) ? "expired" : "valid"} {date}
-    </Badge>
+    <Card className="flex flex-col">
+      <div className="flex items-start justify-between gap-3 p-5 pb-4">
+        <div className="flex min-w-0 items-center gap-3">
+          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[0.75rem] bg-primary-50 text-primary-600">
+            <Truck className="h-5 w-5" aria-hidden />
+          </span>
+          <div className="min-w-0">
+            <p className="whitespace-nowrap font-mono text-label font-semibold text-ink">{vehicle.plateNumber}</p>
+            <p className="truncate text-caption text-ink-muted">{vehicle.model}</p>
+          </div>
+        </div>
+        {health === "valid" ? (
+          <Badge className="shrink-0" variant="success" dot>
+            Compliant
+          </Badge>
+        ) : health === "expired" ? (
+          <Badge className="shrink-0" variant="destructive" dot>
+            Expired
+          </Badge>
+        ) : (
+          <Badge className="shrink-0" variant="warning" dot>
+            Incomplete
+          </Badge>
+        )}
+      </div>
+
+      <dl className="grid grid-cols-2 gap-3 px-5">
+        <div className="tile rounded-inset px-3 py-2.5">
+          <dt className="text-caption text-ink-muted">Type</dt>
+          <dd className="text-label font-semibold text-ink">{TYPE_LABELS[vehicle.type]}</dd>
+        </div>
+        <div className="tile rounded-inset px-3 py-2.5">
+          <dt className="text-caption text-ink-muted">Capacity</dt>
+          <dd className="text-label font-semibold tabular-nums text-ink">
+            {vehicle.capacityKg?.toLocaleString() ?? "-"} kg
+          </dd>
+        </div>
+      </dl>
+
+      <ul className="mt-4 flex-1 divide-y divide-line/60 border-t border-line/60">
+        {COMPLIANCE_DOCS.map(({ key, label }) => {
+          const date = vehicle[key] as string | null | undefined;
+          const state = docState(date);
+          const { label: stateLabel, icon: Icon, className } = DOC_STATE_UI[state];
+          return (
+            <li key={key} className="flex items-center justify-between gap-3 px-5 py-2.5">
+              <span className="text-label text-ink-secondary">{label}</span>
+              <span className={cn("flex items-center gap-1.5 text-caption font-medium", className)}>
+                <Icon className="h-3.5 w-3.5" aria-hidden />
+                {state === "missing" ? stateLabel : formatDate(date)}
+                <span className="sr-only">({stateLabel})</span>
+              </span>
+            </li>
+          );
+        })}
+      </ul>
+
+      {canManage && (
+        <div className="flex justify-end gap-1 border-t border-line/60 px-3 py-2">
+          <Button variant="ghost" size="sm" onClick={onEdit} aria-label={`Edit ${vehicle.plateNumber}`}>
+            <Pencil /> Edit
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onDelete}
+            aria-label={`Delete ${vehicle.plateNumber}`}
+            className="text-ink-muted hover:bg-danger-soft hover:text-danger-fg"
+          >
+            <Trash2 /> Delete
+          </Button>
+        </div>
+      )}
+    </Card>
   );
 }
 
@@ -53,10 +183,17 @@ export default function FleetPage() {
   const { activeMembership } = useActiveOrg();
   const [editing, setEditing] = useState<Vehicle | null>(null);
   const [formOpen, setFormOpen] = useState(false);
+  const [deleting, setDeleting] = useState<Vehicle | null>(null);
 
   const canManage = ["owner", "coordinator"].includes(activeMembership?.role ?? "");
 
-  const { data: fleet, isLoading } = useQuery({
+  const {
+    data: fleet,
+    isLoading,
+    isError,
+    error,
+    refetch,
+  } = useQuery({
     queryKey: ["fleet"],
     queryFn: async () => (await axios.get("/api/v1/vehicles")).data.data.vehicles as Vehicle[],
   });
@@ -113,155 +250,175 @@ export default function FleetPage() {
     mutationFn: async (id: number) => axios.delete(`/api/v1/vehicles/${id}`),
     onSuccess: () => {
       toast.success("Vehicle deleted.");
+      setDeleting(null);
       queryClient.invalidateQueries({ queryKey: ["fleet"] });
     },
     onError: handleApiError,
   });
 
+  const list = fleet ?? [];
+  const health = list.map(vehicleHealth);
+  const totalCapacity = list.reduce((sum, v) => sum + (v.capacityKg ?? 0), 0);
+
   return (
-    <div className="mx-auto max-w-4xl">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-dark">Fleet</h1>
-          <p className="mt-1 text-sm text-mute">
-            Vehicle compliance dates feed the assignment gate.
-          </p>
-        </div>
-        {canManage && (
-          <Button onClick={openCreate}>
-            <Plus className="h-4 w-4" /> Register vehicle
-          </Button>
-        )}
+    <>
+      <PageHeader
+        title="Fleet"
+        description="Vehicle compliance dates feed the assignment gate. Expired insurance or inspection fails it, as does an expired Yellow Card on cross-border shipments."
+        actions={
+          canManage && (
+            <Button onClick={openCreate}>
+              <Plus /> Register vehicle
+            </Button>
+          )
+        }
+      />
+
+      <div className="mb-5 grid grid-cols-2 gap-4 xl:grid-cols-4">
+        <StatCard
+          label="Vehicles"
+          value={list.length}
+          detail={`${totalCapacity.toLocaleString()} kg total capacity`}
+          icon={Truck}
+          tone="brand"
+          loading={isLoading}
+        />
+        <StatCard
+          label="Compliant"
+          value={health.filter((h) => h === "valid").length}
+          detail="All dates on file and valid"
+          icon={ShieldCheck}
+          tone="success"
+          loading={isLoading}
+        />
+        <StatCard
+          label="Expired document"
+          value={health.filter((h) => h === "expired").length}
+          detail="Can fail the compliance gate"
+          icon={ShieldAlert}
+          tone="danger"
+          loading={isLoading}
+        />
+        <StatCard
+          label="Incomplete"
+          value={health.filter((h) => h === "incomplete").length}
+          detail="At least one date not on file"
+          icon={AlertTriangle}
+          tone="warning"
+          loading={isLoading}
+        />
       </div>
 
-      {formOpen && (
-        <Card className="mt-6">
-          <CardHeader>
-            <CardTitle className="text-lg">{editing ? "Edit vehicle" : "Register a vehicle"}</CardTitle>
-            <CardDescription>
-              Expired insurance, inspection or COMESA Yellow Card will block dispatch.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handleSubmit((values) => save.mutate(values))} className="space-y-4" noValidate>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <Label>Plate number</Label>
-                  <Input placeholder="RAE 001 T" {...register("plateNumber")} />
-                  {errors.plateNumber && (
-                    <p className="text-sm text-red-600">{errors.plateNumber.message}</p>
-                  )}
-                </div>
-                <div className="space-y-2">
-                  <Label>Model</Label>
-                  <Input placeholder="Mercedes Actros 2545" {...register("model")} />
-                  {errors.model && <p className="text-sm text-red-600">{errors.model.message}</p>}
-                </div>
-              </div>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <Label>Type</Label>
-                  <select
-                    className="flex h-10 w-full rounded-md border border-gray-200 bg-white px-3 py-2 text-sm focus:border-primary focus:outline-none"
-                    {...register("type")}
-                  >
-                    {Object.entries(TYPE_LABELS).map(([value, label]) => (
-                      <option key={value} value={value}>
-                        {label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="space-y-2">
-                  <Label>Capacity (kg)</Label>
-                  <Input type="number" min={1} {...register("capacityKg")} />
-                  {errors.capacityKg && (
-                    <p className="text-sm text-red-600">{errors.capacityKg.message}</p>
-                  )}
-                </div>
-              </div>
-              <div className="grid gap-4 sm:grid-cols-3">
-                <div className="space-y-2">
-                  <Label>Insurance expires</Label>
-                  <Input type="date" {...register("insuranceExpiresAt")} />
-                </div>
-                <div className="space-y-2">
-                  <Label>Inspection expires</Label>
-                  <Input type="date" {...register("inspectionExpiresAt")} />
-                </div>
-                <div className="space-y-2">
-                  <Label>Yellow Card expires</Label>
-                  <Input type="date" {...register("yellowCardExpiresAt")} />
-                </div>
-              </div>
-              <div className="flex gap-2">
-                <Button type="submit" disabled={save.isPending}>
-                  {save.isPending ? "Saving..." : editing ? "Save changes" : "Register vehicle"}
-                </Button>
-                <Button type="button" variant="ghost" onClick={() => setFormOpen(false)}>
-                  Cancel
-                </Button>
-              </div>
-            </form>
-          </CardContent>
+      {isError ? (
+        <Card>
+          <ErrorState error={error} onRetry={() => refetch()} title="We couldn't load the fleet" />
         </Card>
+      ) : isLoading ? (
+        <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <Skeleton key={i} className="h-72 rounded-card" />
+          ))}
+        </div>
+      ) : list.length === 0 ? (
+        <Card>
+          <EmptyState
+            icon={Truck}
+            title="No vehicles registered yet"
+            description="Register vehicles with their capacity and compliance dates so coordinators can dispatch them."
+            action={
+              canManage && (
+                <Button size="sm" onClick={openCreate}>
+                  <Plus /> Register vehicle
+                </Button>
+              )
+            }
+          />
+        </Card>
+      ) : (
+        <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+          {list.map((vehicle) => (
+            <VehicleCard
+              key={vehicle.id}
+              vehicle={vehicle}
+              canManage={canManage}
+              onEdit={() => openEdit(vehicle)}
+              onDelete={() => setDeleting(vehicle)}
+            />
+          ))}
+        </div>
       )}
 
-      <div className="mt-6 space-y-4">
-        {isLoading ? (
-          <p className="py-12 text-center text-sm text-mute">Loading fleet...</p>
-        ) : (fleet ?? []).length === 0 ? (
-          <p className="rounded-md border border-dashed border-gray-200 py-12 text-center text-sm text-mute">
-            No vehicles registered yet.
-          </p>
-        ) : (
-          fleet!.map((vehicle) => (
-            <Card key={vehicle.id}>
-              <CardContent className="p-5">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div className="flex items-center gap-3">
-                    <span className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-primary-100 text-primary">
-                      <Truck className="h-5 w-5" />
-                    </span>
-                    <div>
-                      <p className="font-semibold">
-                        {vehicle.plateNumber}{" "}
-                        <span className="font-normal text-mute">· {vehicle.model}</span>
-                      </p>
-                      <p className="text-xs text-mute">
-                        {TYPE_LABELS[vehicle.type]} · {vehicle.capacityKg?.toLocaleString()} kg capacity
-                      </p>
-                    </div>
-                  </div>
-                  {canManage && (
-                    <div className="flex gap-1">
-                      <Button variant="ghost" size="icon" aria-label="Edit" onClick={() => openEdit(vehicle)}>
-                        <Pencil className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        aria-label="Delete"
-                        disabled={remove.isPending}
-                        onClick={() => {
-                          if (confirm(`Delete ${vehicle.plateNumber}?`)) remove.mutate(vehicle.id);
-                        }}
-                      >
-                        <Trash2 className="h-4 w-4 text-red-500" />
-                      </Button>
-                    </div>
-                  )}
-                </div>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  <ComplianceChip label="Insurance" date={vehicle.insuranceExpiresAt} />
-                  <ComplianceChip label="Inspection" date={vehicle.inspectionExpiresAt} />
-                  <ComplianceChip label="Yellow Card" date={vehicle.yellowCardExpiresAt} />
-                </div>
-              </CardContent>
-            </Card>
-          ))
-        )}
-      </div>
-    </div>
+      <Dialog
+        open={formOpen}
+        onClose={() => setFormOpen(false)}
+        dismissible={!save.isPending}
+        size="lg"
+        title={editing ? `Edit ${editing.plateNumber}` : "Register a vehicle"}
+        description="Expired insurance or inspection blocks dispatch; an expired COMESA Yellow Card blocks cross-border dispatch."
+        footer={
+          <>
+            <Button variant="outline" onClick={() => setFormOpen(false)} disabled={save.isPending}>
+              Cancel
+            </Button>
+            <Button type="submit" form="vehicle-form" loading={save.isPending}>
+              {save.isPending ? "Saving..." : editing ? "Save changes" : "Register vehicle"}
+            </Button>
+          </>
+        }
+      >
+        <form
+          id="vehicle-form"
+          onSubmit={handleSubmit((values) => save.mutate(values))}
+          className="space-y-4 pb-2"
+          noValidate
+        >
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label="Plate number" required error={errors.plateNumber?.message}>
+              <Input placeholder="RAE 001 T" {...register("plateNumber")} />
+            </Field>
+            <Field label="Model" required error={errors.model?.message}>
+              <Input placeholder="Mercedes Actros 2545" {...register("model")} />
+            </Field>
+            <Field label="Type">
+              <Select {...register("type")}>
+                {Object.entries(TYPE_LABELS).map(([value, label]) => (
+                  <option key={value} value={value}>
+                    {label}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+            <Field label="Capacity (kg)" required error={errors.capacityKg?.message}>
+              <Input type="number" min={1} {...register("capacityKg")} />
+            </Field>
+          </div>
+          <fieldset className="rounded-inset border border-line/70 p-4">
+            <legend className="px-1 text-label text-ink-secondary">Compliance expiry dates</legend>
+            <div className="grid gap-4 sm:grid-cols-3">
+              <Field label="Insurance" optional>
+                <Input type="date" {...register("insuranceExpiresAt")} />
+              </Field>
+              <Field label="Inspection" optional>
+                <Input type="date" {...register("inspectionExpiresAt")} />
+              </Field>
+              <Field label="Yellow Card" optional>
+                <Input type="date" {...register("yellowCardExpiresAt")} />
+              </Field>
+            </div>
+          </fieldset>
+        </form>
+      </Dialog>
+
+      <ConfirmDialog
+        open={Boolean(deleting)}
+        tone="danger"
+        title={`Delete ${deleting?.plateNumber ?? "vehicle"}?`}
+        description="The vehicle is removed from your fleet. A vehicle on an active shipment can't be deleted; finished shipments keep their history but lose the vehicle link."
+        confirmLabel="Delete vehicle"
+        loading={remove.isPending}
+        onConfirm={() => deleting && remove.mutate(deleting.id)}
+        onCancel={() => setDeleting(null)}
+      />
+    </>
   );
 }
