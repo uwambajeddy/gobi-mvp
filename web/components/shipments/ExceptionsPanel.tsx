@@ -1,19 +1,22 @@
 "use client";
 
 import { useState } from "react";
-import { useMutation } from "@tanstack/react-query";
-import { AlertTriangle } from "lucide-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { AlertTriangle, CheckCircle2, Plus, ShieldCheck, X } from "lucide-react";
 import toast from "react-hot-toast";
 import useAxiosAuth from "@/hooks/useAxiosAuth";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { Field } from "@/components/ui/field";
+import { Callout } from "@/components/ui/feedback";
 import { ExceptionStatusBadge, SeverityBadge } from "@/components/common/StatusBadge";
+import { EmptyState } from "@/components/common/States";
 import { handleApiError } from "@/lib/handleApiError";
 import { EXCEPTION_TYPE_LABELS } from "@/lib/labels";
-import { formatDateTime } from "@/lib/utils";
+import { capitalize, cn, formatDateTime, fullName } from "@/lib/utils";
 import { Shipment, ShipmentAccess, ShipmentException } from "@/types";
 
 /**
@@ -31,6 +34,7 @@ export function ExceptionsPanel({
   onChanged: () => void;
 }) {
   const axios = useAxiosAuth();
+  const queryClient = useQueryClient();
   const [formOpen, setFormOpen] = useState(false);
   const [type, setType] = useState("breakdown");
   const [severity, setSeverity] = useState("medium");
@@ -38,8 +42,24 @@ export function ExceptionsPanel({
   const [resolving, setResolving] = useState<number | null>(null);
   const [resolutionNotes, setResolutionNotes] = useState("");
 
-  const canOpen = access.isShipper || access.isCarrier || access.isAgent || access.isAssignedDriver;
+  // The workspace payload omits who opened/resolved each exception; the
+  // dedicated endpoint includes them. Fall back to the payload while loading.
+  const queryKey = ["shipment-exceptions", String(shipment.id)];
+  const { data: detailed } = useQuery({
+    queryKey,
+    queryFn: async () =>
+      (await axios.get(`/api/v1/shipments/${shipment.id}/exceptions`)).data.data.exceptions as ShipmentException[],
+  });
+  const list = detailed ?? exceptions;
+
+  const canOpen = Boolean(access.can?.openException);
   const canResolve = access.isCarrierCoordinator || access.isAdmin;
+  const openCount = list.filter((e) => e.status !== "resolved").length;
+
+  const changed = () => {
+    queryClient.invalidateQueries({ queryKey });
+    onChanged();
+  };
 
   const open = useMutation({
     mutationFn: async () =>
@@ -48,7 +68,7 @@ export function ExceptionsPanel({
       toast.success("Exception opened. Completion is blocked until it is resolved.");
       setFormOpen(false);
       setNotes("");
-      onChanged();
+      changed();
     },
     onError: handleApiError,
   });
@@ -60,139 +80,182 @@ export function ExceptionsPanel({
       toast.success("Exception resolved.");
       setResolving(null);
       setResolutionNotes("");
-      onChanged();
+      changed();
     },
     onError: handleApiError,
   });
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       {canOpen && (
         <Card>
-          <CardHeader className="flex-row items-center justify-between space-y-0 pb-3">
-            <CardTitle className="flex items-center gap-2 text-base">
-              <AlertTriangle className="h-4 w-4 text-primary" /> Report an exception
-            </CardTitle>
-            <Button size="sm" variant={formOpen ? "ghost" : "default"} onClick={() => setFormOpen(!formOpen)}>
-              {formOpen ? "Close" : "Open exception"}
+          <CardHeader className={cn(!formOpen && "pb-5")}>
+            <div>
+              <CardTitle>
+                <AlertTriangle className="h-[1.125rem] w-[1.125rem] text-primary-500" aria-hidden /> Report an
+                exception
+              </CardTitle>
+              <CardDescription>Breakdowns, holds, damage or anything that blocks normal progress.</CardDescription>
+            </div>
+            <Button variant={formOpen ? "ghost" : "default"} aria-expanded={formOpen} onClick={() => setFormOpen(!formOpen)}>
+              {formOpen ? (
+                <>
+                  <X /> Close
+                </>
+              ) : (
+                <>
+                  <Plus /> Open exception
+                </>
+              )}
             </Button>
           </CardHeader>
           {formOpen && (
             <CardContent className="space-y-4">
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <Label>Type</Label>
-                  <select
-                    value={type}
-                    onChange={(event) => setType(event.target.value)}
-                    className="flex h-10 w-full rounded-md border border-gray-200 bg-white px-3 py-2 text-sm focus:border-primary focus:outline-none"
-                  >
+              <div className="grid gap-4 md:grid-cols-2">
+                <Field label="Type">
+                  <Select value={type} onChange={(event) => setType(event.target.value)}>
                     {Object.entries(EXCEPTION_TYPE_LABELS).map(([value, label]) => (
                       <option key={value} value={value}>
                         {label}
                       </option>
                     ))}
-                  </select>
-                </div>
-                <div className="space-y-2">
-                  <Label>Severity</Label>
-                  <select
-                    value={severity}
-                    onChange={(event) => setSeverity(event.target.value)}
-                    className="flex h-10 w-full rounded-md border border-gray-200 bg-white px-3 py-2 text-sm focus:border-primary focus:outline-none"
-                  >
+                  </Select>
+                </Field>
+                <Field label="Severity">
+                  <Select value={severity} onChange={(event) => setSeverity(event.target.value)}>
                     {["low", "medium", "high", "critical"].map((level) => (
                       <option key={level} value={level}>
-                        {level.charAt(0).toUpperCase() + level.slice(1)}
+                        {capitalize(level)}
                       </option>
                     ))}
-                  </select>
-                </div>
+                  </Select>
+                </Field>
               </div>
-              <div className="space-y-2">
-                <Label>What happened?</Label>
+              <Field label="What happened?" hint="At least 3 characters.">
                 <Textarea
                   placeholder="e.g. Gearbox failure 20km before Rusumo; mechanic dispatched."
                   value={notes}
                   onChange={(event) => setNotes(event.target.value)}
                 />
+              </Field>
+              <div className="flex justify-end gap-2">
+                <Button variant="ghost" onClick={() => setFormOpen(false)}>
+                  Cancel
+                </Button>
+                <Button disabled={notes.trim().length < 3} loading={open.isPending} onClick={() => open.mutate()}>
+                  {open.isPending ? "Opening..." : "Open exception"}
+                </Button>
               </div>
-              <Button
-                size="sm"
-                disabled={notes.trim().length < 3 || open.isPending}
-                onClick={() => open.mutate()}
-              >
-                {open.isPending ? "Opening..." : "Open exception"}
-              </Button>
             </CardContent>
           )}
         </Card>
       )}
 
-      <Card>
+      {openCount > 0 && (
+        <Callout tone="danger" title={`${openCount} open exception${openCount === 1 ? "" : "s"}`}>
+          The shipment cannot be completed until every exception is resolved.
+        </Callout>
+      )}
+
+      <Card className="overflow-hidden">
         <CardHeader>
-          <CardTitle className="text-base">Exceptions ({exceptions.length})</CardTitle>
+          <div>
+            <CardTitle>Exceptions</CardTitle>
+            <CardDescription>
+              {list.length} recorded · {openCount} open
+            </CardDescription>
+          </div>
         </CardHeader>
-        <CardContent className="divide-y divide-gray-100 p-0">
-          {exceptions.length === 0 ? (
-            <p className="py-10 text-center text-sm text-mute">
-              No exceptions. The shipment is running clean.
-            </p>
-          ) : (
-            exceptions.map((exception) => (
-              <div key={exception.id} className="px-6 py-4">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div>
-                    <p className="flex items-center gap-2 text-sm font-medium">
-                      {EXCEPTION_TYPE_LABELS[exception.type] ?? exception.type}
-                      <SeverityBadge severity={exception.severity} />
-                      <ExceptionStatusBadge status={exception.status} />
-                    </p>
-                    <p className="mt-0.5 text-xs text-mute">
-                      Opened by {exception.openedBy?.firstName} {exception.openedBy?.lastName} ·{" "}
-                      {formatDateTime(exception.createdAt)}
-                    </p>
-                  </div>
-                  {canResolve && exception.status !== "resolved" && (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => setResolving(resolving === exception.id ? null : exception.id)}
-                    >
-                      Resolve
-                    </Button>
-                  )}
-                </div>
-                {exception.notes && <p className="mt-2 text-sm text-body-text">{exception.notes}</p>}
-                {exception.status === "resolved" && exception.resolutionNotes && (
-                  <p className="mt-2 rounded-md bg-emerald-50 p-2.5 text-xs text-emerald-800">
-                    Resolved by {exception.resolvedBy?.firstName} {exception.resolvedBy?.lastName}{" "}
-                    ({formatDateTime(exception.resolvedAt)}): {exception.resolutionNotes}
-                  </p>
-                )}
-                {resolving === exception.id && (
-                  <div className="mt-3 flex flex-wrap items-end gap-3 rounded-md bg-gray-50 p-3">
-                    <div className="min-w-64 flex-1 space-y-2">
-                      <Label>Resolution notes</Label>
-                      <Input
-                        placeholder="How was it resolved?"
-                        value={resolutionNotes}
-                        onChange={(event) => setResolutionNotes(event.target.value)}
-                      />
+        {list.length === 0 ? (
+          <EmptyState
+            compact
+            icon={ShieldCheck}
+            title="No exceptions"
+            description="The shipment is running clean."
+            className="border-t border-line/60"
+          />
+        ) : (
+          <ul className="divide-y divide-line/60 border-t border-line/60">
+            {list.map((exception) => {
+              const resolved = exception.status === "resolved";
+              return (
+                <li key={exception.id} className="px-5 py-4 sm:px-6">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="flex min-w-0 items-start gap-3">
+                      <span
+                        className={cn(
+                          "flex h-9 w-9 shrink-0 items-center justify-center rounded-[0.625rem]",
+                          resolved ? "bg-success-soft text-success-fg" : "bg-danger-soft text-danger-fg",
+                        )}
+                      >
+                        {resolved ? (
+                          <CheckCircle2 className="h-4 w-4" aria-hidden />
+                        ) : (
+                          <AlertTriangle className="h-4 w-4" aria-hidden />
+                        )}
+                      </span>
+                      <div className="min-w-0">
+                        <p className="flex flex-wrap items-center gap-2 text-label font-semibold text-ink">
+                          {EXCEPTION_TYPE_LABELS[exception.type] ?? exception.type}
+                          <SeverityBadge severity={exception.severity} />
+                          <ExceptionStatusBadge status={exception.status} />
+                        </p>
+                        <p className="mt-0.5 text-caption text-ink-muted">
+                          Opened{exception.openedBy ? ` by ${fullName(exception.openedBy)}` : ""} ·{" "}
+                          {formatDateTime(exception.createdAt)}
+                        </p>
+                        {exception.notes && <p className="mt-2 text-body text-ink-secondary">{exception.notes}</p>}
+                      </div>
                     </div>
-                    <Button
-                      size="sm"
-                      disabled={resolutionNotes.trim().length < 3 || resolve.isPending}
-                      onClick={() => resolve.mutate(exception.id)}
-                    >
-                      Confirm resolution
-                    </Button>
+                    {canResolve && !resolved && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="self-start"
+                        aria-expanded={resolving === exception.id}
+                        onClick={() => setResolving(resolving === exception.id ? null : exception.id)}
+                      >
+                        Resolve
+                      </Button>
+                    )}
                   </div>
-                )}
-              </div>
-            ))
-          )}
-        </CardContent>
+                  {resolved && exception.resolutionNotes && (
+                    <div className="mt-3 rounded-inset border border-success-line/70 bg-success-soft p-3 sm:ml-12">
+                      <p className="text-caption font-semibold text-success-fg">
+                        Resolved{exception.resolvedBy ? ` by ${fullName(exception.resolvedBy)}` : ""} ·{" "}
+                        {formatDateTime(exception.resolvedAt)}
+                      </p>
+                      <p className="mt-0.5 text-caption text-ink-secondary">{exception.resolutionNotes}</p>
+                    </div>
+                  )}
+                  {resolving === exception.id && (
+                    <div className="mt-3 flex flex-col gap-3 rounded-inset border border-line/70 bg-surface-muted p-3.5 sm:ml-12 md:flex-row md:items-start">
+                      <Field label="Resolution notes" hint="At least 3 characters." className="md:flex-1">
+                        <Input
+                          placeholder="How was it resolved?"
+                          value={resolutionNotes}
+                          onChange={(event) => setResolutionNotes(event.target.value)}
+                        />
+                      </Field>
+                      <div className="flex gap-2 md:mt-[1.625rem]">
+                        <Button variant="ghost" onClick={() => setResolving(null)}>
+                          Cancel
+                        </Button>
+                        <Button
+                          disabled={resolutionNotes.trim().length < 3}
+                          loading={resolve.isPending}
+                          onClick={() => resolve.mutate(exception.id)}
+                        >
+                          Confirm resolution
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        )}
       </Card>
     </div>
   );
