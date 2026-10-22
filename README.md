@@ -122,14 +122,14 @@ docker compose up -d
 # 2. API
 cd api
 npm install
-cp .env.example .env
+cp .env.example .env    # add Cloudinary keys for document files and Brevo keys for email
 cp .env.test.example .env.test
 npm run aio          # migrate + seed + start on http://localhost:8080
 
 # 3. Web (new terminal)
 cd web
 npm install
-cp .env.example .env.local
+cp .env.example .env.local   # optional: set NEXT_PUBLIC_GOOGLE_MAPS_API_KEY for route maps
 npm run dev          # http://localhost:3000
 
 # 4. Tests
@@ -157,11 +157,19 @@ Seeded fleet: `RAE 001 T` fully compliant · `RAE 002 T` insurance **expired** �
 
 Seeded shipments: `GB-2026-0001` completed (full history) · `GB-2026-0002` cross-border **in transit** mid-corridor · `GB-2026-0003` awaiting documents (one rejected) · `GB-2026-0004` submitted with quote · `GB-2026-0005` draft.
 
+## Document files and email
+
+**Document files (Cloudinary).** Uploads accept PDF, JPG or PNG up to 10 MB; the type is checked from the file's content, not its name. Files are stored as private Cloudinary assets. To view one, the web app asks `GET /shipments/documents/:docId/file`, which checks that the caller is a party to the shipment and returns a download link that expires after 5 minutes. Seeded documents carry a file name only and show "no file stored".
+
+**Email (Brevo).** The API emails whoever has to act next: carrier and clearing-agent assignment, quote received, quote approved, document rejected (to the uploader), documents complete, vehicle and driver assigned (to the driver and the shipper), exception opened, proof of delivery, completion and cancellation, plus a welcome email, "added to an organization" and driver-licence review results. Emails are sent in the background, never block the action, and never go to the person who acted.
+
+The seeded `@gobi.rw` addresses cannot receive mail, so for development and demos set `EMAIL_REDIRECT_TO` to one inbox: every email goes there, with the intended recipient shown in the subject. Tests never send email or touch Cloudinary.
+
 ## Demo walkthrough
 
 1. **Shipper** (`shipper@gobi.rw`): create a cross-border shipment with packages → submit → assign TransAfrica as carrier and ClearFast as clearing agent.
 2. **Coordinator** (`coordinator@gobi.rw`): submit a quote. **Shipper**: approve it and the document checklist appears.
-3. Upload the mandatory documents (any party); **coordinator** verifies each one. Watch the Document Gate flip to green and the status advance to *Documents complete*. Reject one to see it regress.
+3. Upload the mandatory documents as PDF or image files (any party); the **coordinator** opens each one with **View** and verifies it from the viewer. Watch the Document Gate flip to green and the status advance to *Documents complete*. Reject one to see it regress (the uploader gets an email with the reason).
 4. **Coordinator** → Assignment tab: pick the expired-insurance truck + expired-licence driver and the Compliance Gate **blocks** with exact failures. Either fix the pairing (RAE 001 T + driver@) or override with a written reason (audited).
 5. Record the corridor journey on the Timeline: *picked up* (status → in transit), *border approached*, *border cleared* ("Truck crossed Rusumo at 15:42"), *customs released*, *arrived at destination*.
 6. Capture **POD** → shipper confirms receipt → *completed*. Try completing with an open exception first to see the closure rule.
@@ -177,7 +185,7 @@ Base URL: `http://localhost:8080/api/v1`. Full spec at `/api/v1/docs`.
 | Organizations | `POST/GET /organizations`, `GET /organizations/mine`, `GET/POST /organizations/:id/members` |
 | Shipment lifecycle | `POST/GET /shipments`, `GET/PATCH /shipments/:id`, `POST /shipments/:id/submit\|cancel` |
 | Award | `POST /shipments/:id/assign-carrier\|assign-clearing-agent\|quote\|approve-quote` |
-| Documents | `GET/POST /shipments/:id/documents`, `PATCH /shipments/documents/:docId/verify\|reject` |
+| Documents | `GET/POST /shipments/:id/documents` (multipart upload), `GET /shipments/documents/:docId/file` (signed view link), `PATCH /shipments/documents/:docId/verify\|reject` |
 | Assignment | `GET /shipments/:id/assignment-preview`, `POST /shipments/:id/assign` (gates + audited override) |
 | Timeline | `GET/POST /shipments/:id/events` |
 | POD & closure | `POST /shipments/:id/pod`, `POST /shipments/:id/complete` |
@@ -191,7 +199,7 @@ Multi-org users select their acting organization with the `x-organization-id` he
 
 ## Tech stack
 
-**Backend:** Express 4, Sequelize 6 (PostgreSQL), JWT auth with organization-scoped RBAC, Joi validation, service-layer gates (document / compliance), immutable `activity_logs`, Swagger UI, Babel, Mocha + Chai + chai-http + nyc.
+**Backend:** Express 4, Sequelize 6 (PostgreSQL), JWT auth with organization-scoped RBAC, Joi validation, service-layer gates (document / compliance), immutable `activity_logs`, Cloudinary (private document storage, multer uploads), Brevo (transactional email), Swagger UI, Babel, Mocha + Chai + chai-http + nyc.
 
 **Frontend:** Next.js 14 App Router, TypeScript, Tailwind CSS, NextAuth (credentials), TanStack React Query, React Hook Form + Zod, Axios with org-context header, Lucide icons.
 
@@ -206,7 +214,7 @@ npm run test:ci   # resets gobi_mvp_test (migrate + seed), then runs Mocha with 
 
 The suite covers auth, organizations and RBAC, the shipment lifecycle, document and compliance gates (including audited overrides), operations (events, payments, exceptions, POD and closure) and the admin endpoints.
 
-Current result: **43 passing**, with 77% statement and 80% line coverage. The web app is verified with a production build (`cd web && npm run build`).
+Current result: **52 passing**, with 78% statement and 80% line coverage. The web app is verified with a production build (`cd web && npm run build`).
 
 ## Deployment plan
 
@@ -215,21 +223,21 @@ The MVP currently runs locally (Docker Compose for PostgreSQL, Node for the API 
 | Component | Platform | Build / start | Configuration |
 |---|---|---|---|
 | PostgreSQL | Managed Postgres (Render or Neon) | n/a | SSL is already required by the `production` Sequelize config |
-| API (`api/`) | Render web service, Node 18+ | `npm ci && npm run build` / `npm start` | `NODE_ENV=production`, `DATABASE_URL`, `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`, `JWT_ACCESS_TIME`, `JWT_REFRESH_TIME` |
-| Web (`web/`) | Vercel (native Next.js hosting) | `npm run build` (automatic) | `NEXT_PUBLIC_API_URL` (API URL), `NEXTAUTH_URL` (web URL), `NEXTAUTH_SECRET` |
+| API (`api/`) | Render web service, Node 18+ | `npm ci && npm run build` / `npm start` | `NODE_ENV=production`, `DATABASE_URL`, `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`, `JWT_ACCESS_TIME`, `JWT_REFRESH_TIME`, `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET`, `BREVO_API_KEY`, `BREVO_SENDER_EMAIL`, `WEB_APP_URL` (web URL, for email links). Never set `EMAIL_REDIRECT_TO` in production. |
+| Web (`web/`) | Vercel (native Next.js hosting) | `npm run build` (automatic) | `NEXT_PUBLIC_API_URL` (API URL), `NEXTAUTH_URL` (web URL), `NEXTAUTH_SECRET`, optional `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` and `NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID` |
 
 **Release steps**
 
 1. Provision the database and copy its connection string into the API's `DATABASE_URL`.
 2. Deploy the API, then run migrations as a release step: `NODE_ENV=production npx sequelize-cli db:migrate`. Seed (`npm run seed`) only on a demo environment, never on real data.
-3. Deploy the web app with `NEXT_PUBLIC_API_URL` pointing at the API and a freshly generated `NEXTAUTH_SECRET`.
+3. Deploy the web app with `NEXT_PUBLIC_API_URL` pointing at the API and a freshly generated `NEXTAUTH_SECRET`. For maps, use a Google Maps key restricted by HTTP referrer to the web domain and to the Maps JavaScript, Places (New) and Routes APIs, plus a production Map ID (`NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID`; the default `DEMO_MAP_ID` is for development only).
 4. Smoke test: open `/api/v1/docs`, sign in as each persona and run the demo walkthrough above.
 
 **Before real users**
 
 - Add a GitHub Actions workflow that runs `npm run test:ci` against a Postgres service container and `npm run build` for the web app on every pull request.
 - Restrict CORS on the API to the web app's origin (it is open for local development).
-- Store document files in object storage (S3 or Cloudinary). The API already records document metadata and a `fileUrl`, so only the upload step changes.
+- Payment proofs still record a file name only; move them to the same private Cloudinary storage as documents.
 - Generate long random JWT and NextAuth secrets per environment, and enable automated database backups.
 
 ## License
