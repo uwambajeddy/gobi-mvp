@@ -4,17 +4,17 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
 
 const badgeVariants = cva(
-  "inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold",
+  "inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border px-2.5 py-0.5 text-caption font-medium",
   {
     variants: {
       variant: {
-        default: "bg-primary-100 text-primary-800",
-        secondary: "bg-gray-100 text-gray-800",
-        success: "bg-emerald-100 text-emerald-800",
-        warning: "bg-amber-100 text-amber-800",
-        info: "bg-blue-100 text-blue-800",
-        destructive: "bg-red-100 text-red-800",
-        outline: "border border-gray-200 text-gray-700",
+        default: "border-primary-200/70 bg-primary-50 text-primary-700",
+        secondary: "border-line bg-surface-sunken text-ink-secondary",
+        success: "border-success-line/70 bg-success-soft text-success-fg",
+        warning: "border-warning-line/80 bg-warning-soft text-warning-fg",
+        info: "border-info-line/70 bg-info-soft text-info-fg",
+        destructive: "border-danger-line/70 bg-danger-soft text-danger-fg",
+        outline: "border-line bg-surface text-ink-secondary",
       },
     },
     defaultVariants: {
@@ -23,12 +23,35 @@ const badgeVariants = cva(
   },
 );
 
-export interface BadgeProps
-  extends React.HTMLAttributes<HTMLDivElement>,
-    VariantProps<typeof badgeVariants> {}
+const dotColors: Record<string, string> = {
+  default: "bg-primary-500",
+  secondary: "bg-ink-subtle",
+  success: "bg-success",
+  warning: "bg-warning",
+  info: "bg-info",
+  destructive: "bg-danger",
+  outline: "bg-ink-subtle",
+};
 
-function Badge({ className, variant, ...props }: BadgeProps) {
-  return <div className={cn(badgeVariants({ variant }), className)} {...props} />;
+export interface BadgeProps
+  extends React.HTMLAttributes<HTMLSpanElement>,
+    VariantProps<typeof badgeVariants> {
+  /** Leading status dot (identity is still carried by the text label). */
+  dot?: boolean;
+}
+
+function Badge({ className, variant, dot, children, ...props }: BadgeProps) {
+  return (
+    <span className={cn(badgeVariants({ variant }), className)} {...props}>
+      {dot && (
+        <span
+          aria-hidden
+          className={cn("h-1.5 w-1.5 shrink-0 rounded-full", dotColors[variant ?? "default"])}
+        />
+      )}
+      {children}
+    </span>
+  );
 }
 
 export { Badge, badgeVariants };

@@ -1,29 +1,35 @@
 import { Slot } from "@radix-ui/react-slot";
 import { cva, type VariantProps } from "class-variance-authority";
+import { Loader2 } from "lucide-react";
 import * as React from "react";
 
 import { cn } from "@/lib/utils";
 
 const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50",
+  "focus-ring inline-flex shrink-0 items-center justify-center gap-2 whitespace-nowrap font-medium transition-[color,background-color,border-color,box-shadow] duration-150 disabled:pointer-events-none disabled:opacity-50 [&_svg]:h-4 [&_svg]:w-4 [&_svg]:shrink-0",
   {
     variants: {
       variant: {
-        default: "bg-primary text-white hover:bg-primary-600",
-        destructive: "bg-red-500 text-white hover:bg-red-600",
+        default: "bg-primary-600 text-white shadow-brand hover:bg-primary-700 active:bg-primary-800",
+        destructive: "bg-danger text-white shadow-sm hover:bg-danger-fg",
+        "destructive-outline":
+          "border border-danger-line bg-surface text-danger-fg hover:border-danger/40 hover:bg-danger-soft",
         outline:
-          "border border-gray-200 bg-white text-gray-900 hover:bg-gray-50",
-        secondary: "bg-gray-100 text-gray-900 hover:bg-gray-200",
-        ghost: "text-gray-700 hover:bg-gray-100 hover:text-gray-900",
-        link: "text-primary underline-offset-4 hover:underline",
+          "border border-line bg-surface text-ink shadow-card hover:border-line-strong hover:bg-surface-muted",
+        secondary: "bg-surface-sunken text-ink hover:bg-line",
+        ghost: "text-ink-secondary hover:bg-surface-sunken hover:text-ink",
+        soft: "bg-primary-50 text-primary-700 hover:bg-primary-100",
+        link: "h-auto px-0 text-primary-600 underline-offset-4 hover:underline",
       },
       size: {
-        default: "h-10 px-4 py-2",
-        sm: "h-9 rounded-md px-3",
-        lg: "h-11 rounded-md px-8",
-        icon: "h-10 w-10",
+        default: "h-control rounded-control px-4 text-body",
+        sm: "h-control-sm rounded-control px-3 text-label",
+        lg: "h-control-lg rounded-control px-6 text-body",
+        icon: "h-control w-control rounded-control",
+        "icon-sm": "h-control-sm w-control-sm rounded-control",
       },
     },
+    compoundVariants: [{ variant: "link", className: "h-auto px-0" }],
     defaultVariants: {
       variant: "default",
       size: "default",
@@ -35,17 +41,30 @@ export interface ButtonProps
   extends React.ButtonHTMLAttributes<HTMLButtonElement>,
     VariantProps<typeof buttonVariants> {
   asChild?: boolean;
+  /** Shows a spinner and disables the button while an action is in flight. */
+  loading?: boolean;
 }
 
 const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ className, variant, size, asChild = false, ...props }, ref) => {
+  ({ className, variant, size, asChild = false, loading = false, disabled, children, ...props }, ref) => {
     const Comp = asChild ? Slot : "button";
     return (
       <Comp
         className={cn(buttonVariants({ variant, size, className }))}
         ref={ref}
+        disabled={asChild ? undefined : disabled || loading}
+        aria-busy={loading || undefined}
         {...props}
-      />
+      >
+        {asChild ? (
+          children
+        ) : (
+          <>
+            {loading && <Loader2 className="animate-spin" aria-hidden />}
+            {children}
+          </>
+        )}
+      </Comp>
     );
   },
 );

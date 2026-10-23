@@ -2,6 +2,158 @@
 @tailwind components;
 @tailwind utilities;
 
-body {
-  @apply bg-light-base font-body text-gray-900 antialiased;
+/*
+ * Gobi design tokens (RGB channels so Tailwind can apply opacity).
+ * Tailwind maps these in tailwind.config.ts: bg-canvas, text-ink-muted, etc.
+ */
+@layer base {
+  :root {
+    /* Cool mist drawn from the ink navy, so white panels read as panels. */
+    --canvas: 236 239 245;
+    --surface: 255 255 255;
+    --surface-muted: 246 248 251;
+    --surface-sunken: 236 240 246;
+    --line: 224 229 238;
+    --line-strong: 204 211 224;
+
+    --ink: 15 26 51;
+    --ink-secondary: 61 71 89;
+    --ink-muted: 95 107 126;
+    --ink-subtle: 138 148 166;
+
+    --success: 16 185 129;
+    --success-fg: 4 120 87;
+    --success-soft: 236 253 245;
+    --success-line: 167 243 208;
+
+    --warning: 245 158 11;
+    --warning-fg: 180 83 9;
+    --warning-soft: 255 251 235;
+    --warning-line: 253 230 138;
+
+    --danger: 220 38 38;
+    --danger-fg: 185 28 28;
+    --danger-soft: 254 242 242;
+    --danger-line: 254 202 202;
+
+    --info: 59 130 246;
+    --info-fg: 29 78 216;
+    --info-soft: 239 246 255;
+    --info-line: 191 219 254;
+  }
+
+  /* Keep focused / scrolled-to elements clear of the sticky top bar. */
+  html {
+    scroll-padding-top: 5rem;
+  }
+
+  /* A faint dot grid on the canvas: it is what the glass panels frost over. */
+  body {
+    @apply bg-canvas font-body text-body text-ink antialiased;
+    background-image: radial-gradient(rgb(var(--ink) / 0.08) 1px, transparent 1.25px);
+    background-size: 18px 18px;
+    background-attachment: fixed;
+  }
+
+  ::selection {
+    @apply bg-primary-100 text-ink;
+  }
+}
+
+@layer components {
+  /* Shared focus treatment for every interactive element. */
+  .focus-ring {
+    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2 focus-visible:ring-offset-surface;
+  }
+
+  /* Titles and figures: Archivo, widened a little on its width axis. */
+  .font-display {
+    font-family: var(--font-display), var(--font-body), system-ui, sans-serif;
+    font-variation-settings: "wdth" 112;
+    letter-spacing: -0.01em;
+  }
+
+  /*
+   * Poster headlines for the landing and auth pages: the same Archivo, taken
+   * to its narrowest width and set heavy in capitals, like freight signage.
+   * The source text stays sentence case for screen readers.
+   */
+  .font-poster {
+    font-family: var(--font-display), var(--font-body), system-ui, sans-serif;
+    font-variation-settings: "wdth" 62;
+    font-weight: 800;
+    text-transform: uppercase;
+    line-height: 0.92;
+  }
+
+  /*
+   * Frosted glass panel: translucent white over the dot grid, a bright top
+   * edge and a hairline outline. Inside it, "muted" tiles resolve to solid
+   * white, so content sits on the glass instead of sinking into it.
+   */
+  .glass {
+    --surface-muted: 255 255 255;
+    background-color: rgb(255 255 255 / 0.48);
+    -webkit-backdrop-filter: blur(18px) saturate(1.5);
+    backdrop-filter: blur(18px) saturate(1.5);
+    border: 1px solid rgb(255 255 255);
+    box-shadow:
+      0 0 0 1px rgb(var(--ink) / 0.06),
+      inset 0 1px 0 rgb(255 255 255),
+      inset 0 0 0 1px rgb(255 255 255 / 0.5),
+      0 1px 2px rgb(var(--ink) / 0.04),
+      0 12px 32px -16px rgb(var(--ink) / 0.18);
+  }
+
+  /* Dark frosted glass for panels set on photos; keeps white text legible. */
+  .glass-dark {
+    background-color: rgb(var(--ink) / 0.4);
+    -webkit-backdrop-filter: blur(16px) saturate(1.6);
+    backdrop-filter: blur(16px) saturate(1.6);
+    border: 1px solid rgb(255 255 255 / 0.18);
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.22),
+      0 12px 32px -16px rgb(0 0 0 / 0.5);
+  }
+
+  /* Solid white tile raised on a glass panel. */
+  .tile {
+    background-color: rgb(var(--surface));
+    box-shadow:
+      0 0 0 1px rgb(var(--ink) / 0.06),
+      0 1px 2px rgb(var(--ink) / 0.05);
+  }
+
+  /* Hatched fill for progress bars and meters; sits on top of a bg colour. */
+  .fill-hatch {
+    background-image: repeating-linear-gradient(-45deg, rgb(255 255 255 / 0.3) 0 3px, transparent 3px 7px);
+  }
+
+  /* Topographic contour lines for ink (navy) surfaces such as the sidebar. */
+  .bg-contours {
+    background-image: url("/textures/contours.svg");
+    background-repeat: no-repeat;
+    background-position: center bottom;
+    background-size: 100% auto;
+  }
+
+  /* Native checkbox styled to the system. */
+  .checkbox {
+    @apply h-4 w-4 rounded border-line-strong text-primary-600 transition-colors focus:ring-2 focus:ring-primary-500 focus:ring-offset-1;
+  }
+}
+
+@layer utilities {
+  .scrollbar-thin {
+    scrollbar-width: thin;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    transition-duration: 1ms !important;
+  }
 }
