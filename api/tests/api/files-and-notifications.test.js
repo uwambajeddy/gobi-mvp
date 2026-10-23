@@ -1,5 +1,5 @@
 import { expect } from "chai";
-import { asUser, loginAs, PERSONAS, SEED } from "../helpers/auth.helper";
+import { asUser, loginAs, registerUser, PERSONAS, SEED } from "../helpers/auth.helper";
 import { createShipment, driveShipmentTo, uploadAllMandatoryDocs } from "../helpers/shipment.helper";
 import { SAMPLE_PDF, SAMPLE_PNG, SAMPLE_TEXT, pdfFile } from "../helpers/files.helper";
 import { testOutbox } from "../../src/services/email.service";
@@ -155,6 +155,15 @@ describe("Email notifications", () => {
     expect(message.subject).to.include(target.label);
     expect(message.text).to.include("Scan is illegible");
     expect(sentTo(PERSONAS.COORDINATOR, "document_rejected")).to.have.length(0);
+  });
+
+  it("sends a welcome email when someone registers", async () => {
+    const user = await registerUser();
+    await flushNotifications();
+
+    const [message] = sentTo(user.user.email, "welcome");
+    expect(message).to.exist;
+    expect(message.subject).to.equal("Welcome to Gobi");
   });
 
   it("escapes text that users typed", async () => {
