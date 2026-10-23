@@ -66,6 +66,13 @@ export const asUser = (tokens) => ({
     chai.request(app).patch(url).set("Authorization", `Bearer ${tokens.accessToken}`).send(body),
   delete: (url) =>
     chai.request(app).delete(url).set("Authorization", `Bearer ${tokens.accessToken}`),
+  upload: (url, fields = {}, file) => {
+    let request = chai.request(app).post(url).set("Authorization", `Bearer ${tokens.accessToken}`);
+    Object.entries(fields).forEach(([name, value]) => {
+      request = request.field(name, value);
+    });
+    return file ? request.attach("file", file.buffer, { filename: file.name, contentType: file.type }) : request;
+  },
 });
 
 export { chai, app };

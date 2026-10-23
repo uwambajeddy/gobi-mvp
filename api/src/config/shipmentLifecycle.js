@@ -37,11 +37,17 @@ const CANCELLABLE_STATUSES = [
   "execution_assigned",
 ];
 
+const TERMINAL_STATUSES = SHIPMENT_STATUSES.filter((status) => ALLOWED_TRANSITIONS[status].length === 0);
+
+const OPEN_STATUSES = SHIPMENT_STATUSES.filter((status) => !TERMINAL_STATUSES.includes(status));
+
 const canTransition = (from, to) => (ALLOWED_TRANSITIONS[from] || []).includes(to);
 
 module.exports = {
   SHIPMENT_STATUSES,
   ALLOWED_TRANSITIONS,
   CANCELLABLE_STATUSES,
+  TERMINAL_STATUSES,
+  OPEN_STATUSES,
   canTransition,
 };

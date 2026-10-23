@@ -6,23 +6,24 @@ import { logActivity } from "../services/activityLog.service";
 import { ACTIVITY_ACTIONS } from "../utils/activityActions";
 import { recordSystemEvent } from "../services/shipmentEvents.service";
 import { evaluateDocumentGate, syncDocumentPhase } from "../services/documentGate.service";
-import { getShipmentWithContext } from "../services/shipmentAccess.service";
 import { getDocumentType } from "../config/shipmentDocuments";
+import {
+  cleanFileName,
+  detectFileType,
+  signedFileUrl,
+  storageMode,
+  storeFile,
+} from "../services/fileStorage.service";
 import db from "../database/models";
 
-const { ok, created, badRequest, notFound, forbidden } = statusCodes;
-const { shipment_documents, shipments } = db;
+const { ok, created, badRequest, notFound, badGateway, serviceUnavailable } = statusCodes;
+const { shipment_documents } = db;
 
 const loadDocuments = (shipmentId) =>
   shipment_documents.findAll({ where: { shipmentId }, order: [["id", "ASC"]] });
 
-export const listDocuments = catchAsync(async (req, res, next) => {
-  const { shipment, ctx } = await getShipmentWithContext(req.params.id, req, { include: [] });
-
-  if (!shipment) return next(new AppError("Shipment not found.", notFound));
-  if (!ctx.isParty) {
-    return next(new AppError("You are not a party to this shipment.", forbidden));
-  }
+export const listDocuments = catchAsync(async (req, res) => {
+  const { shipment } = req;
 
   const documents = await loadDocuments(shipment.id);
   const gate = evaluateDocumentGate(documents);
@@ -30,24 +31,31 @@ export const listDocuments = catchAsync(async (req, res, next) => {
   return successResponse(res, ok, { documents, gate });
 });
 
-/**
- * POST /api/v1/shipments/:id/documents: upload (metadata) against the checklist.
- * Any party organization member may upload; verification stays with the carrier.
- */
 export const uploadDocument = catchAsync(async (req, res, next) => {
-  const { shipment, ctx } = await getShipmentWithContext(req.params.id, req, { include: [] });
+  const { shipment } = req;
 
-  if (!shipment) return next(new AppError("Shipment not found.", notFound));
-  if (!ctx.isShipper && !ctx.isCarrier && !ctx.isAgent) {
-    return next(new AppError("Only shipment parties can upload documents.", forbidden));
+  if (!req.file) {
+    return next(new AppError("Attach the document file (PDF, JPG or PNG).", badRequest));
   }
-  if (["draft", "submitted", "completed", "cancelled"].includes(shipment.status)) {
-    return next(
-      new AppError("Documents can only be uploaded after quote approval and before closure.", badRequest),
-    );
+  if (!detectFileType(req.file.buffer)) {
+    return next(new AppError("The file's content is not a PDF, JPG or PNG.", badRequest));
+  }
+  if (storageMode() === "disabled") {
+    return next(new AppError("Document storage is not configured on this server.", serviceUnavailable));
   }
 
-  const { docType, fileName, fileUrl, expiresAt } = req.body;
+  const { docType, expiresAt } = req.body;
+  const fileName = cleanFileName(req.file.originalname);
+
+  let stored;
+  try {
+    stored = await storeFile(req.file, {
+      folder: `gobi/${process.env.NODE_ENV || "development"}/shipments/${shipment.id}`,
+    });
+  } catch (error) {
+    console.error("Document storage failed:", error.message);
+    return next(new AppError("We couldn't store the file. Please try again.", badGateway));
+  }
 
   let document = await shipment_documents.findOne({
     where: { shipmentId: shipment.id, docType },
@@ -55,7 +63,11 @@ export const uploadDocument = catchAsync(async (req, res, next) => {
 
   const uploadFields = {
     fileName,
-    fileUrl,
+    fileUrl: null,
+    fileKey: stored.key,
+    fileResourceType: stored.resourceType,
+    fileMimeType: stored.mimeType,
+    fileSize: stored.size,
     expiresAt: expiresAt || null,
     status: "uploaded",
     rejectionReason: null,
@@ -99,16 +111,27 @@ export const uploadDocument = catchAsync(async (req, res, next) => {
   return successResponse(res, created, { document, gate, shipmentStatus: shipment.status });
 });
 
-export const verifyDocument = catchAsync(async (req, res, next) => {
-  const document = await shipment_documents.findByPk(req.params.docId);
-  if (!document) return next(new AppError("Document not found.", notFound));
+export const getDocumentFile = catchAsync(async (req, res, next) => {
+  const { document } = req;
 
-  const { shipment, ctx } = await getShipmentWithContext(document.shipmentId, req, { include: [] });
-  if (!ctx.isCarrierCoordinator && !ctx.isAdmin) {
-    return next(
-      new AppError("Only the carrier's coordinators can verify documents.", forbidden),
-    );
+  if (!document.fileKey) {
+    return next(new AppError("No file is stored for this document.", notFound));
   }
+
+  const { url, expiresAt } = signedFileUrl(document);
+
+  return successResponse(res, ok, {
+    url,
+    expiresAt,
+    fileName: document.fileName,
+    mimeType: document.fileMimeType,
+    fileSize: document.fileSize,
+  });
+});
+
+export const verifyDocument = catchAsync(async (req, res, next) => {
+  const { shipment, document } = req;
+
   if (document.status !== "uploaded") {
     return next(new AppError("Only uploaded documents can be verified.", badRequest));
   }
@@ -141,15 +164,8 @@ export const verifyDocument = catchAsync(async (req, res, next) => {
 });
 
 export const rejectDocument = catchAsync(async (req, res, next) => {
-  const document = await shipment_documents.findByPk(req.params.docId);
-  if (!document) return next(new AppError("Document not found.", notFound));
+  const { shipment, document } = req;
 
-  const { shipment, ctx } = await getShipmentWithContext(document.shipmentId, req, { include: [] });
-  if (!ctx.isCarrierCoordinator && !ctx.isAdmin) {
-    return next(
-      new AppError("Only the carrier's coordinators can reject documents.", forbidden),
-    );
-  }
   if (!["uploaded", "verified"].includes(document.status)) {
     return next(new AppError("Only uploaded or verified documents can be rejected.", badRequest));
   }
