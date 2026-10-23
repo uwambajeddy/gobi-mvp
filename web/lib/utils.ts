@@ -1,5 +1,17 @@
 import { type ClassValue, clsx } from "clsx";
-import { twMerge } from "tailwind-merge";
+import { formatDistanceToNowStrict } from "date-fns";
+import { extendTailwindMerge } from "tailwind-merge";
+
+const twMerge = extendTailwindMerge({
+  extend: {
+    classGroups: {
+      "font-size": [{ text: ["overline", "caption", "label", "body", "heading", "title", "display"] }],
+      rounded: [{ rounded: ["control", "inset", "card", "panel"] }],
+      shadow: [{ shadow: ["card", "raised", "overlay", "brand"] }],
+    },
+    theme: { spacing: ["control-sm", "control", "control-lg", "topbar", "sidebar", "sidebar-collapsed"] },
+  },
+});
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -15,3 +27,23 @@ export const formatDateTime = (value?: string | null) =>
         timeStyle: "short",
       })
     : "-";
+
+export const formatDate = (value?: string | null) =>
+  value
+    ? new Date(value.length === 10 ? `${value}T00:00:00` : value).toLocaleDateString(undefined, {
+        dateStyle: "medium",
+      })
+    : "-";
+
+export const formatRelative = (value?: string | null) =>
+  value ? formatDistanceToNowStrict(new Date(value), { addSuffix: true }) : "-";
+
+export const formatKg = (kg: number) => `${kg.toLocaleString()} kg`;
+
+export const capitalize = (value: string) => value.charAt(0).toUpperCase() + value.slice(1);
+
+export const initials = (first?: string | null, last?: string | null) =>
+  `${first?.charAt(0) ?? ""}${last?.charAt(0) ?? ""}`.toUpperCase() || "?";
+
+export const fullName = (person?: { firstName?: string; lastName?: string } | null) =>
+  person ? `${person.firstName ?? ""} ${person.lastName ?? ""}`.trim() : "";
