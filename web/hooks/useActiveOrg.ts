@@ -20,6 +20,9 @@ const writeCookie = (orgId: number) => {
   document.cookie = `${ACTIVE_ORG_COOKIE}=${orgId}; path=/; max-age=${60 * 60 * 24 * 365}`;
 };
 
+/** Makes `orgId` the acting organization on the next load (e.g. right after joining it). */
+export const rememberActiveOrg = writeCookie;
+
 /**
  * The caller's organization memberships (fresh from the API) and the
  * currently selected acting organization, persisted in a cookie that the

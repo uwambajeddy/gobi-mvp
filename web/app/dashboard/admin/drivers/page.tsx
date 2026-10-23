@@ -3,30 +3,37 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import toast from "react-hot-toast";
+import { Check, ShieldCheck, X } from "lucide-react";
 import useAxiosAuth from "@/hooks/useAxiosAuth";
-import { Badge } from "@/components/ui/badge";
+import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { Card } from "@/components/ui/card";
+import { Tabs } from "@/components/ui/tabs";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { DriverStatusBadge } from "@/components/common/StatusBadge";
+import { PageHeader } from "@/components/common/PageHeader";
+import { EmptyState, ErrorState, ListSkeleton } from "@/components/common/States";
 import { handleApiError } from "@/lib/handleApiError";
-import { cn, formatDateTime } from "@/lib/utils";
+import { cn, formatDate, formatDateTime, fullName } from "@/lib/utils";
 import { DriverProfile } from "@/types";
 
 const FILTERS = ["pending", "approved", "rejected", "all"] as const;
+type Filter = (typeof FILTERS)[number];
+
+const isExpired = (date?: string | null) => Boolean(date && new Date(date) < new Date());
 
 export default function AdminDriversPage() {
   const axios = useAxiosAuth();
   const queryClient = useQueryClient();
-  const [filter, setFilter] = useState<(typeof FILTERS)[number]>("pending");
+  const [filter, setFilter] = useState<Filter>("pending");
 
-  const { data: profiles, isLoading } = useQuery({
+  const {
+    data: profiles,
+    isLoading,
+    isError,
+    error,
+    refetch,
+  } = useQuery({
     queryKey: ["admin-drivers", filter],
     queryFn: async () =>
       (
@@ -47,72 +54,73 @@ export default function AdminDriversPage() {
     onError: handleApiError,
   });
 
+  const list = profiles ?? [];
+
   return (
-    <div className="mx-auto max-w-5xl">
-      <h1 className="text-2xl font-bold text-dark">Driver approvals</h1>
-      <p className="mt-1 text-sm text-mute">
-        Verify licences before drivers can be assigned to shipments.
-      </p>
+    <>
+      <PageHeader
+        eyebrow="Administration"
+        title="Driver approvals"
+        description="Verify licences before drivers can be assigned to shipments. Approval feeds the compliance gate."
+      />
 
-      <div className="mt-6 flex gap-2">
-        {FILTERS.map((key) => (
-          <button
-            key={key}
-            onClick={() => setFilter(key)}
-            className={cn(
-              "rounded-full px-4 py-1.5 text-sm font-medium capitalize transition-colors",
-              filter === key ? "bg-primary text-white" : "bg-white text-gray-600 hover:bg-gray-100",
-            )}
-          >
-            {key}
-          </button>
-        ))}
-      </div>
+      <Tabs
+        idBase="drivers"
+        label="Filter driver profiles by status"
+        value={filter}
+        onValueChange={setFilter}
+        className="mb-4 w-fit max-w-full"
+        items={FILTERS.map((key) => ({ value: key, label: key === "all" ? "All" : key[0].toUpperCase() + key.slice(1) }))}
+      />
 
-      <Card className="mt-6">
-        <CardContent className="p-0">
-          {isLoading ? (
-            <p className="py-12 text-center text-sm text-mute">Loading driver profiles...</p>
-          ) : (profiles ?? []).length === 0 ? (
-            <p className="py-12 text-center text-sm text-mute">No {filter === "all" ? "" : `${filter} `}profiles.</p>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Driver</TableHead>
-                  <TableHead>Licence</TableHead>
-                  <TableHead>Expires</TableHead>
-                  <TableHead>Submitted</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {profiles!.map((profile) => (
+      <Card className="overflow-hidden" role="tabpanel" id={`drivers-panel-${filter}`} aria-labelledby={`drivers-tab-${filter}`}>
+        {isError ? (
+          <ErrorState error={error} onRetry={() => refetch()} title="We couldn't load driver profiles" />
+        ) : isLoading ? (
+          <ListSkeleton rows={4} />
+        ) : list.length === 0 ? (
+          <EmptyState
+            icon={ShieldCheck}
+            title={`No ${filter === "all" ? "" : `${filter} `}profiles`}
+            description={filter === "pending" ? "Every submitted licence has been reviewed." : undefined}
+          />
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Driver</TableHead>
+                <TableHead>Licence</TableHead>
+                <TableHead>Expires</TableHead>
+                <TableHead>Submitted</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {list.map((profile) => {
+                const expired = isExpired(profile.licenceExpiresAt);
+                const pending = review.isPending && review.variables?.id === profile.id;
+                return (
                   <TableRow key={profile.id}>
                     <TableCell>
-                      <p className="font-medium">
-                        {profile.user?.firstName} {profile.user?.lastName}
-                      </p>
-                      <p className="text-xs text-mute">{profile.user?.email}</p>
+                      <div className="flex items-center gap-3">
+                        <Avatar firstName={profile.user?.firstName} lastName={profile.user?.lastName} tone="neutral" />
+                        <div className="min-w-0">
+                          <p className="whitespace-nowrap text-label font-semibold text-ink">{fullName(profile.user)}</p>
+                          <p className="text-caption text-ink-muted">{profile.user?.email}</p>
+                        </div>
+                      </div>
                     </TableCell>
-                    <TableCell className="font-mono text-sm">{profile.licenceNumber}</TableCell>
-                    <TableCell className="text-sm">{profile.licenceExpiresAt ?? "-"}</TableCell>
-                    <TableCell className="whitespace-nowrap text-sm">
+                    <TableCell className="whitespace-nowrap font-mono text-caption text-ink">{profile.licenceNumber}</TableCell>
+                    <TableCell className={cn("whitespace-nowrap text-caption", expired ? "font-semibold text-danger-fg" : "text-ink")}>
+                      {formatDate(profile.licenceExpiresAt)}
+                      {expired && " (expired)"}
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap text-caption text-ink-secondary">
                       {formatDateTime(profile.createdAt)}
                     </TableCell>
                     <TableCell>
-                      <Badge
-                        variant={
-                          profile.status === "approved"
-                            ? "success"
-                            : profile.status === "rejected"
-                              ? "destructive"
-                              : "warning"
-                        }
-                      >
-                        {profile.status}
-                      </Badge>
+                      <DriverStatusBadge status={profile.status} />
                     </TableCell>
                     <TableCell className="text-right">
                       {profile.status === "pending" && (
@@ -120,28 +128,30 @@ export default function AdminDriversPage() {
                           <Button
                             size="sm"
                             disabled={review.isPending}
+                            loading={pending && review.variables?.status === "approved"}
                             onClick={() => review.mutate({ id: profile.id, status: "approved" })}
                           >
-                            Approve
+                            <Check /> Approve
                           </Button>
                           <Button
                             size="sm"
-                            variant="destructive"
+                            variant="destructive-outline"
                             disabled={review.isPending}
+                            loading={pending && review.variables?.status === "rejected"}
                             onClick={() => review.mutate({ id: profile.id, status: "rejected" })}
                           >
-                            Reject
+                            <X /> Reject
                           </Button>
                         </div>
                       )}
                     </TableCell>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
-        </CardContent>
+                );
+              })}
+            </TableBody>
+          </Table>
+        )}
       </Card>
-    </div>
+    </>
   );
 }

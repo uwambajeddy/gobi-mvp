@@ -1,6 +1,7 @@
 import { expect } from "chai";
 import { asUser, loginAs, PERSONAS } from "../helpers/auth.helper";
 import { driveShipmentTo } from "../helpers/shipment.helper";
+import { SAMPLE_TEXT, pdfFile } from "../helpers/files.helper";
 
 describe("Operational execution API", () => {
   describe("Event timeline", () => {
@@ -120,20 +121,20 @@ describe("Operational execution API", () => {
   });
 
   describe("Payments ledger", () => {
-    it("records a payment with proof and marks pending payments paid", async () => {
+    it("records a payment with an uploaded proof and marks pending payments paid", async () => {
       const { shipment, shipper, coordinator } = await driveShipmentTo("in_transit");
 
-      const withProof = await asUser(coordinator.tokens).post(
+      const withProof = await asUser(coordinator.tokens).upload(
         `/api/v1/shipments/${shipment.id}/payments`,
-        {
-          type: "border_fee",
-          amount: 85000,
-          proofFileName: "border-fee.pdf",
-          proofUrl: "https://files.gobi.local/test/border-fee.pdf",
-        },
+        { type: "border_fee", amount: 85000 },
+        pdfFile("border-fee.pdf"),
       );
       expect(withProof).to.have.status(201);
       expect(withProof.body.data.payment.status).to.equal("paid");
+      expect(withProof.body.data.payment.hasProof).to.equal(true);
+      expect(withProof.body.data.payment.proofFileName).to.equal("border-fee.pdf");
+      // Storage details never leave the server.
+      expect(withProof.body.data.payment).to.not.have.property("proofFileKey");
 
       const pending = await asUser(coordinator.tokens).post(
         `/api/v1/shipments/${shipment.id}/payments`,
@@ -152,6 +153,57 @@ describe("Operational execution API", () => {
         `/api/v1/shipments/${shipment.id}/payments`,
       );
       expect(ledger.body.data.payments).to.have.length(2);
+    });
+
+    it("attaches proof to a pending payment and lets every party view it", async () => {
+      const { shipment, shipper, coordinator } = await driveShipmentTo("in_transit");
+
+      const pending = await asUser(coordinator.tokens).post(
+        `/api/v1/shipments/${shipment.id}/payments`,
+        { type: "port_fee", amount: 320000 },
+      );
+      const paymentId = pending.body.data.payment.id;
+      expect(pending.body.data.payment.hasProof).to.equal(false);
+
+      const noProofYet = await asUser(shipper.tokens).get(`/api/v1/shipments/payments/${paymentId}/proof`);
+      expect(noProofYet).to.have.status(404);
+
+      const attached = await asUser(coordinator.tokens).upload(
+        `/api/v1/shipments/payments/${paymentId}/proof`,
+        {},
+        pdfFile("port-receipt.pdf"),
+      );
+      expect(attached).to.have.status(200);
+      expect(attached.body.data.payment.status).to.equal("paid");
+      expect(attached.body.data.payment.hasProof).to.equal(true);
+
+      // The shipper is a party: read-only, but may view the proof.
+      const link = await asUser(shipper.tokens).get(`/api/v1/shipments/payments/${paymentId}/proof`);
+      expect(link).to.have.status(200);
+      expect(link.body.data.url).to.be.a("string");
+      expect(link.body.data.fileName).to.equal("port-receipt.pdf");
+      expect(link.body.data.mimeType).to.equal("application/pdf");
+
+      const shipperAttach = await asUser(shipper.tokens).upload(
+        `/api/v1/shipments/payments/${paymentId}/proof`,
+        {},
+        pdfFile("other.pdf"),
+      );
+      expect(shipperAttach).to.have.status(403);
+    });
+
+    it("rejects proof files whose content is not a PDF, JPG or PNG", async () => {
+      const { shipment, coordinator } = await driveShipmentTo("in_transit");
+
+      const res = await asUser(coordinator.tokens).upload(
+        `/api/v1/shipments/${shipment.id}/payments`,
+        { type: "border_fee", amount: 85000 },
+        { buffer: SAMPLE_TEXT, name: "receipt.pdf", type: "application/pdf" },
+      );
+      expect(res).to.have.status(400);
+
+      const ledger = await asUser(coordinator.tokens).get(`/api/v1/shipments/${shipment.id}/payments`);
+      expect(ledger.body.data.payments).to.have.length(0);
     });
 
     it("blocks the shipper from recording payments", async () => {

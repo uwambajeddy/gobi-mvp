@@ -38,29 +38,13 @@ export const authOptions: AuthOptions = {
         email: { label: "Email", type: "text" },
         password: { label: "Password", type: "password" },
       },
-      async authorize(credentials, req) {
-        const isSignup = req?.body?.isSignup === "true" || req?.body?.isSignup === true;
-        const endpoint = isSignup
-          ? `${API_URL}/api/v1/auth/register`
-          : `${API_URL}/api/v1/auth/login`;
-
-        const body = isSignup
-          ? {
-              firstName: req?.body?.firstName,
-              lastName: req?.body?.lastName,
-              email: credentials?.email,
-              password: credentials?.password,
-              ...(req?.body?.phoneNumber && { phoneNumber: req.body.phoneNumber }),
-            }
-          : {
-              email: credentials?.email,
-              password: credentials?.password,
-            };
-
-        const res = await fetch(endpoint, {
+      // Sign-in only. Accounts are created by the sign-up page once the email
+      // is verified (POST /auth/register, then /auth/verify-email).
+      async authorize(credentials) {
+        const res = await fetch(`${API_URL}/api/v1/auth/login`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(body),
+          body: JSON.stringify({ email: credentials?.email, password: credentials?.password }),
         });
 
         const response = await res.json();

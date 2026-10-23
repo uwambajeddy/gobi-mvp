@@ -10,23 +10,51 @@ import {
   evaluateComplianceGate,
   computeCargoWeightKg,
 } from "../services/complianceGate.service";
-import { getShipmentWithContext } from "../services/shipmentAccess.service";
+import { isValidId } from "../middlewares/validateId";
 import db from "../database/models";
 
-const { ok, badRequest, notFound, forbidden } = statusCodes;
+// Routes run `authorizeShipment(action)` first, so handlers receive `req.shipment`.
+const { ok, badRequest } = statusCodes;
 const { shipment_documents, shipment_packages, vehicles, users, driver_profiles, organization_members } = db;
 
-/** Loads everything both gates need for a proposed vehicle + driver pairing. */
-const evaluateGates = async (shipment, vehicleId, driverId) => {
-  const [documents, packages, vehicle, driver] = await Promise.all([
+// A selection outside the shipment's carrier gets the same answer as an id
+// that does not exist, so neither route reveals another carrier's fleet.
+const VEHICLE_NOT_IN_FLEET = "The selected vehicle is not in the assigned carrier's fleet.";
+const NOT_A_CARRIER_DRIVER = "The selected driver is not a driver member of the assigned carrier.";
+
+/** A valid row id, or null for anything else (malformed ids match nothing). */
+const toId = (value) => (isValidId(value) ? Number(value) : null);
+
+/** The vehicle, if it is in the shipment carrier's fleet. */
+const findCarrierVehicle = (shipment, vehicleId) =>
+  toId(vehicleId) && shipment.transportOrgId
+    ? vehicles.findOne({ where: { id: toId(vehicleId), organizationId: shipment.transportOrgId } })
+    : null;
+
+/** The user with their driver profile, if they are an active driver of the shipment's carrier. */
+const findCarrierDriver = async (shipment, driverId) => {
+  if (!toId(driverId) || !shipment.transportOrgId) return null;
+
+  const membership = await organization_members.findOne({
+    where: {
+      userId: toId(driverId),
+      organizationId: shipment.transportOrgId,
+      role: "driver",
+      active: true,
+    },
+  });
+  if (!membership) return null;
+
+  return users.findByPk(toId(driverId), {
+    include: [{ model: driver_profiles, as: "driverProfile" }],
+  });
+};
+
+/** Evaluates both gates for a vehicle + driver already scoped to the carrier. */
+const evaluateGates = async (shipment, vehicle, driver) => {
+  const [documents, packages] = await Promise.all([
     shipment_documents.findAll({ where: { shipmentId: shipment.id } }),
     shipment_packages.findAll({ where: { shipmentId: shipment.id } }),
-    vehicleId ? vehicles.findByPk(vehicleId) : null,
-    driverId
-      ? users.findByPk(driverId, {
-          include: [{ model: driver_profiles, as: "driverProfile" }],
-        })
-      : null,
   ]);
 
   const cargoKg = computeCargoWeightKg(packages);
@@ -38,50 +66,26 @@ const evaluateGates = async (shipment, vehicleId, driverId) => {
     isCrossBorder: shipment.isCrossBorder,
   });
 
-  return { documentGate, complianceGate, vehicle, driver, cargoKg };
-};
-
-/** The vehicle and driver must belong to the carrier organization. */
-const validatePairing = async (shipment, vehicle, driver) => {
-  if (!vehicle) return "Vehicle not found.";
-  if (vehicle.organizationId !== shipment.transportOrgId) {
-    return "The selected vehicle does not belong to the assigned carrier.";
-  }
-  if (!driver) return "Driver not found.";
-
-  const driverMembership = await organization_members.findOne({
-    where: {
-      userId: driver.id,
-      organizationId: shipment.transportOrgId,
-      role: "driver",
-      active: true,
-    },
-  });
-  if (!driverMembership) {
-    return "The selected driver is not a driver member of the assigned carrier.";
-  }
-  return null;
+  return { documentGate, complianceGate, cargoKg };
 };
 
 /**
  * GET /api/v1/shipments/:id/assignment-preview?vehicleId=&driverId=
- * Live gate evaluation for the assignment panel.
+ * Live gate evaluation for the assignment panel. Only the shipment carrier's
+ * own vehicles and drivers can be previewed.
  */
 export const previewAssignment = catchAsync(async (req, res, next) => {
-  const { shipment, ctx } = await getShipmentWithContext(req.params.id, req, { include: [] });
+  const { shipment } = req;
+  const { vehicleId, driverId } = req.query;
 
-  if (!shipment) return next(new AppError("Shipment not found.", notFound));
-  if (!ctx.isCarrierCoordinator && !ctx.isAdmin) {
-    return next(
-      new AppError("Only the carrier's coordinators can prepare assignments.", forbidden),
-    );
-  }
+  const [vehicle, driver] = await Promise.all([
+    findCarrierVehicle(shipment, vehicleId),
+    findCarrierDriver(shipment, driverId),
+  ]);
+  if (vehicleId !== undefined && !vehicle) return next(new AppError(VEHICLE_NOT_IN_FLEET, badRequest));
+  if (driverId !== undefined && !driver) return next(new AppError(NOT_A_CARRIER_DRIVER, badRequest));
 
-  const { documentGate, complianceGate, cargoKg } = await evaluateGates(
-    shipment,
-    req.query.vehicleId,
-    req.query.driverId,
-  );
+  const { documentGate, complianceGate, cargoKg } = await evaluateGates(shipment, vehicle, driver);
 
   return successResponse(res, ok, { documentGate, complianceGate, cargoKg });
 });
@@ -91,19 +95,7 @@ export const previewAssignment = catchAsync(async (req, res, next) => {
  * Both gates must pass, or be explicitly overridden with an audited reason.
  */
 export const assignExecution = catchAsync(async (req, res, next) => {
-  const { shipment, ctx } = await getShipmentWithContext(req.params.id, req, { include: [] });
-
-  if (!shipment) return next(new AppError("Shipment not found.", notFound));
-  if (!ctx.isCarrierCoordinator) {
-    return next(
-      new AppError("Only the carrier's coordinators can assign vehicle and driver.", forbidden),
-    );
-  }
-  if (!["awaiting_documents", "documents_complete"].includes(shipment.status)) {
-    return next(
-      new AppError("Vehicle and driver can only be assigned during the documents phase.", badRequest),
-    );
-  }
+  const { shipment } = req;
 
   const {
     vehicleId,
@@ -113,14 +105,14 @@ export const assignExecution = catchAsync(async (req, res, next) => {
     overrideReason,
   } = req.body;
 
-  const { documentGate, complianceGate, vehicle, driver, cargoKg } = await evaluateGates(
-    shipment,
-    vehicleId,
-    driverId,
-  );
+  const [vehicle, driver] = await Promise.all([
+    findCarrierVehicle(shipment, vehicleId),
+    findCarrierDriver(shipment, driverId),
+  ]);
+  if (!vehicle) return next(new AppError(VEHICLE_NOT_IN_FLEET, badRequest));
+  if (!driver) return next(new AppError(NOT_A_CARRIER_DRIVER, badRequest));
 
-  const pairingError = await validatePairing(shipment, vehicle, driver);
-  if (pairingError) return next(new AppError(pairingError, badRequest));
+  const { documentGate, complianceGate, cargoKg } = await evaluateGates(shipment, vehicle, driver);
 
   // Gate enforcement (overridable, but always audited)
   if (!documentGate.passed && !overrideDocumentGate) {

@@ -4,10 +4,11 @@ import catchAsync from "../utils/catchAsync";
 import { successResponse, deleteResponse } from "../utils/responseHandlers";
 import { logActivity } from "../services/activityLog.service";
 import { ACTIVITY_ACTIONS } from "../utils/activityActions";
+import { OPEN_STATUSES } from "../config/shipmentLifecycle";
 import db from "../database/models";
 
 const { ok, created, notFound, conflict } = statusCodes;
-const { vehicles } = db;
+const { vehicles, shipments } = db;
 
 /**
  * POST /api/v1/vehicles: register a vehicle in the active transport org's fleet.
@@ -105,6 +106,23 @@ export const updateVehicle = catchAsync(async (req, res, next) => {
 export const deleteVehicle = catchAsync(async (req, res, next) => {
   const vehicle = await findOwnVehicle(req, next);
   if (!vehicle) return;
+
+  // Deleting clears `assignedVehicleId` (ON DELETE SET NULL), so a vehicle stays
+  // while an open shipment depends on it. Closed shipments keep their timeline.
+  const active = await shipments.findAll({
+    where: { assignedVehicleId: vehicle.id, status: OPEN_STATUSES },
+    attributes: ["reference"],
+    order: [["id", "ASC"]],
+  });
+  if (active.length) {
+    const references = active.map((shipment) => shipment.reference).join(", ");
+    return next(
+      new AppError(
+        `${vehicle.plateNumber} is assigned to an active shipment (${references}). It can be deleted once that shipment is completed or cancelled.`,
+        conflict,
+      ),
+    );
+  }
 
   await vehicle.destroy();
 

@@ -1,4 +1,3 @@
-import { Op } from "sequelize";
 import statusCodes from "../utils/statusCodes";
 import AppError from "../utils/appError";
 import catchAsync from "../utils/catchAsync";
@@ -6,17 +5,26 @@ import { successResponse } from "../utils/responseHandlers";
 import { logActivity } from "../services/activityLog.service";
 import { ACTIVITY_ACTIONS } from "../utils/activityActions";
 import { recordSystemEvent } from "../services/shipmentEvents.service";
+import { notifyShipmentEvent } from "../services/notifications.service";
 import { syncDocumentPhase } from "../services/documentGate.service";
 import {
-  getShipmentWithContext,
+  describeAllowedActions,
   generateShipmentReference,
+  getShipmentAccess,
   shipmentIncludes,
+  shipmentScope,
 } from "../services/shipmentAccess.service";
+import { presentShipment } from "../services/shipmentVisibility.service";
 import { checklistForShipment } from "../config/shipmentDocuments";
-import { CANCELLABLE_STATUSES } from "../config/shipmentLifecycle";
 import db from "../database/models";
 
-const { ok, created, badRequest, notFound, forbidden } = statusCodes;
+// Routes run `authorizeShipment(action)` first (config/shipmentPolicies), so
+// handlers receive an authorized `req.shipment` in an allowed status.
+const { ok, created, badRequest, notFound, conflict } = statusCodes;
+
+/** A conditional update found the shipment no longer in the state it was read in. */
+const shipmentChanged = () =>
+  new AppError("This shipment changed while you were working on it. Reload it and try again.", conflict);
 const {
   shipments,
   shipment_packages,
@@ -75,22 +83,12 @@ export const createShipment = catchAsync(async (req, res) => {
 
 /**
  * GET /api/v1/shipments: shipments visible to the caller.
- * Admin sees all; everyone else sees shipments where one of their
- * organizations is a party, or where they are the assigned driver.
+ * Admin sees all; drivers see their own assignments; everyone else sees
+ * shipments where one of their organizations is a party (see shipmentScope).
  */
 export const listShipments = catchAsync(async (req, res) => {
-  const where = {};
+  const where = shipmentScope(req);
   if (req.query.status) where.status = req.query.status;
-
-  if (req.user.type !== "admin") {
-    const orgIds = (req.user.memberships || []).map((m) => m.organizationId);
-    where[Op.or] = [
-      { distributionOrgId: { [Op.in]: orgIds.length ? orgIds : [0] } },
-      { transportOrgId: { [Op.in]: orgIds.length ? orgIds : [0] } },
-      { clearingAgentOrgId: { [Op.in]: orgIds.length ? orgIds : [0] } },
-      { assignedDriverId: req.user.id },
-    ];
-  }
 
   const allShipments = await shipments.findAll({
     where,
@@ -98,19 +96,16 @@ export const listShipments = catchAsync(async (req, res) => {
     order: [["updatedAt", "DESC"]],
   });
 
-  return successResponse(res, ok, { shipments: allShipments });
+  return successResponse(res, ok, {
+    shipments: allShipments.map((shipment) => presentShipment(shipment, getShipmentAccess(shipment, req))),
+  });
 });
 
 /**
  * GET /api/v1/shipments/:id: full aggregate for the operations workspace.
  */
-export const getShipment = catchAsync(async (req, res, next) => {
-  const { shipment, ctx } = await getShipmentWithContext(req.params.id, req);
-
-  if (!shipment) return next(new AppError("Shipment not found.", notFound));
-  if (!ctx.isParty) {
-    return next(new AppError("You are not a party to this shipment.", forbidden));
-  }
+export const getShipment = catchAsync(async (req, res) => {
+  const { shipment, access } = req;
 
   const [documents, exceptions] = await Promise.all([
     shipment_documents.findAll({
@@ -124,26 +119,18 @@ export const getShipment = catchAsync(async (req, res, next) => {
   ]);
 
   return successResponse(res, ok, {
-    shipment,
+    shipment: presentShipment(shipment, access),
     documents,
     exceptions,
-    access: ctx,
+    access: { ...access, can: describeAllowedActions(shipment, access) },
   });
 });
 
 /**
  * PATCH /api/v1/shipments/:id: shipper edits a draft.
  */
-export const updateShipment = catchAsync(async (req, res, next) => {
-  const { shipment, ctx } = await getShipmentWithContext(req.params.id, req);
-
-  if (!shipment) return next(new AppError("Shipment not found.", notFound));
-  if (!ctx.isShipper) {
-    return next(new AppError("Only the shipper can edit this shipment.", forbidden));
-  }
-  if (shipment.status !== "draft") {
-    return next(new AppError("Only draft shipments can be edited.", badRequest));
-  }
+export const updateShipment = catchAsync(async (req, res) => {
+  const { shipment } = req;
 
   const { packages, ...fields } = req.body;
   await shipment.update(fields);
@@ -170,16 +157,8 @@ export const updateShipment = catchAsync(async (req, res, next) => {
 /**
  * POST /api/v1/shipments/:id/submit: draft → submitted.
  */
-export const submitShipment = catchAsync(async (req, res, next) => {
-  const { shipment, ctx } = await getShipmentWithContext(req.params.id, req);
-
-  if (!shipment) return next(new AppError("Shipment not found.", notFound));
-  if (!ctx.isShipper) {
-    return next(new AppError("Only the shipper can submit this shipment.", forbidden));
-  }
-  if (shipment.status !== "draft") {
-    return next(new AppError("Only draft shipments can be submitted.", badRequest));
-  }
+export const submitShipment = catchAsync(async (req, res) => {
+  const { shipment } = req;
 
   await shipment.update({ status: "submitted" });
   await recordSystemEvent(shipment.id, "shipment_submitted", { req });
@@ -197,20 +176,8 @@ export const submitShipment = catchAsync(async (req, res, next) => {
 /**
  * POST /api/v1/shipments/:id/cancel: shipper cancels before transit.
  */
-export const cancelShipment = catchAsync(async (req, res, next) => {
-  const { shipment, ctx } = await getShipmentWithContext(req.params.id, req);
-
-  if (!shipment) return next(new AppError("Shipment not found.", notFound));
-  if (!ctx.isShipperCoordinator) {
-    return next(
-      new AppError("Only a shipper owner or coordinator can cancel this shipment.", forbidden),
-    );
-  }
-  if (!CANCELLABLE_STATUSES.includes(shipment.status)) {
-    return next(
-      new AppError(`A shipment in status "${shipment.status}" can no longer be cancelled.`, badRequest),
-    );
-  }
+export const cancelShipment = catchAsync(async (req, res) => {
+  const { shipment } = req;
 
   await shipment.update({ status: "cancelled" });
   await recordSystemEvent(shipment.id, "shipment_cancelled", { req });
@@ -227,17 +194,10 @@ export const cancelShipment = catchAsync(async (req, res, next) => {
 
 /**
  * POST /api/v1/shipments/:id/assign-carrier: shipper picks the transport company.
+ * A quote belongs to the carrier that gave it, so changing the carrier clears it.
  */
 export const assignCarrier = catchAsync(async (req, res, next) => {
-  const { shipment, ctx } = await getShipmentWithContext(req.params.id, req);
-
-  if (!shipment) return next(new AppError("Shipment not found.", notFound));
-  if (!ctx.isShipperCoordinator) {
-    return next(new AppError("Only a shipper owner or coordinator can assign a carrier.", forbidden));
-  }
-  if (shipment.status !== "submitted") {
-    return next(new AppError("A carrier can only be assigned to a submitted shipment.", badRequest));
-  }
+  const { shipment } = req;
 
   const carrier = await organizations.findOne({
     where: { id: req.body.transportOrgId, companyType: "transport" },
@@ -246,11 +206,25 @@ export const assignCarrier = catchAsync(async (req, res, next) => {
     return next(new AppError("Transport organization not found.", notFound));
   }
 
-  await shipment.update({ transportOrgId: carrier.id });
+  const previousTransportOrgId = shipment.transportOrgId;
+  const carrierChanged = previousTransportOrgId !== carrier.id;
+  const quoteCleared = carrierChanged && shipment.quoteAmount != null;
+
+  const [updated] = await shipments.update(
+    {
+      transportOrgId: carrier.id,
+      ...(carrierChanged && { quoteAmount: null, quoteCurrency: "RWF" }),
+    },
+    { where: { id: shipment.id, status: "submitted" } },
+  );
+  if (!updated) return next(shipmentChanged());
+  await shipment.reload();
+
+  const metadata = { transportOrgId: carrier.id, previousTransportOrgId, quoteCleared };
   await recordSystemEvent(shipment.id, "carrier_assigned", {
     req,
-    notes: `Carrier: ${carrier.name}`,
-    metadata: { transportOrgId: carrier.id },
+    notes: `Carrier: ${carrier.name}${quoteCleared ? " (previous carrier's quote cleared)" : ""}`,
+    metadata,
   });
   await logActivity({
     req,
@@ -258,7 +232,7 @@ export const assignCarrier = catchAsync(async (req, res, next) => {
     entityType: "shipments",
     entityId: shipment.id,
     description: `Assigned carrier ${carrier.name} to ${shipment.reference}`,
-    metadata: { transportOrgId: carrier.id },
+    metadata,
   });
 
   return successResponse(res, ok, { shipment });
@@ -268,19 +242,7 @@ export const assignCarrier = catchAsync(async (req, res, next) => {
  * POST /api/v1/shipments/:id/assign-clearing-agent
  */
 export const assignClearingAgent = catchAsync(async (req, res, next) => {
-  const { shipment, ctx } = await getShipmentWithContext(req.params.id, req);
-
-  if (!shipment) return next(new AppError("Shipment not found.", notFound));
-  if (!ctx.isShipperCoordinator) {
-    return next(
-      new AppError("Only a shipper owner or coordinator can assign a clearing agent.", forbidden),
-    );
-  }
-  if (!["submitted", "quote_approved", "awaiting_documents"].includes(shipment.status)) {
-    return next(
-      new AppError("A clearing agent cannot be assigned at this stage of the shipment.", badRequest),
-    );
-  }
+  const { shipment } = req;
 
   const agent = await organizations.findOne({
     where: { id: req.body.clearingAgentOrgId, companyType: "clearing_agent" },
@@ -311,22 +273,17 @@ export const assignClearingAgent = catchAsync(async (req, res, next) => {
  * POST /api/v1/shipments/:id/quote: assigned carrier submits their quotation.
  */
 export const submitQuote = catchAsync(async (req, res, next) => {
-  const { shipment, ctx } = await getShipmentWithContext(req.params.id, req);
+  const { shipment } = req;
 
-  if (!shipment) return next(new AppError("Shipment not found.", notFound));
-  if (!ctx.isCarrierCoordinator) {
-    return next(
-      new AppError("Only the assigned carrier's coordinators can submit a quote.", forbidden),
-    );
-  }
-  if (shipment.status !== "submitted") {
-    return next(new AppError("Quotes can only be submitted on a submitted shipment.", badRequest));
-  }
+  // Only while this carrier is still assigned, so a quote never lands on a
+  // shipment that changed hands mid-request.
+  const [updated] = await shipments.update(
+    { quoteAmount: req.body.amount, quoteCurrency: req.body.currency || "RWF" },
+    { where: { id: shipment.id, status: "submitted", transportOrgId: shipment.transportOrgId } },
+  );
+  if (!updated) return next(shipmentChanged());
+  await shipment.reload();
 
-  await shipment.update({
-    quoteAmount: req.body.amount,
-    quoteCurrency: req.body.currency || "RWF",
-  });
   await logActivity({
     req,
     action: ACTIVITY_ACTIONS.SUBMIT_QUOTE,
@@ -335,6 +292,8 @@ export const submitQuote = catchAsync(async (req, res, next) => {
     description: `Quoted ${req.body.amount} ${req.body.currency || "RWF"} for ${shipment.reference}`,
     metadata: { amount: req.body.amount, currency: req.body.currency || "RWF" },
   });
+  // A quote has no timeline event, so its email is queued here.
+  notifyShipmentEvent("quote_submitted", { shipmentId: shipment.id, actorUserId: req.user.id });
 
   return successResponse(res, ok, { shipment });
 });
@@ -344,24 +303,30 @@ export const submitQuote = catchAsync(async (req, res, next) => {
  * checklist is seeded and the shipment enters the documents phase.
  */
 export const approveQuote = catchAsync(async (req, res, next) => {
-  const { shipment, ctx } = await getShipmentWithContext(req.params.id, req);
+  const { shipment } = req;
 
-  if (!shipment) return next(new AppError("Shipment not found.", notFound));
-  if (!ctx.isShipperCoordinator) {
-    return next(
-      new AppError("Only a shipper owner or coordinator can approve the quote.", forbidden),
-    );
-  }
-  if (shipment.status !== "submitted") {
-    return next(new AppError("Only submitted shipments can have their quote approved.", badRequest));
-  }
   if (!shipment.transportOrgId || shipment.quoteAmount == null) {
     return next(
       new AppError("A carrier must be assigned and a quote submitted before approval.", badRequest),
     );
   }
 
-  await shipment.update({ status: "quote_approved", quoteApprovedAt: new Date() });
+  // Approves exactly the quote and carrier the shipper was shown.
+  const [updated] = await shipments.update(
+    { status: "quote_approved", quoteApprovedAt: new Date() },
+    {
+      where: {
+        id: shipment.id,
+        status: "submitted",
+        transportOrgId: shipment.transportOrgId,
+        quoteAmount: shipment.quoteAmount,
+        quoteCurrency: shipment.quoteCurrency,
+      },
+    },
+  );
+  if (!updated) return next(shipmentChanged());
+  await shipment.reload();
+
   await recordSystemEvent(shipment.id, "quote_approved", {
     req,
     metadata: { amount: shipment.quoteAmount, currency: shipment.quoteCurrency },
@@ -398,18 +363,8 @@ export const approveQuote = catchAsync(async (req, res, next) => {
 /**
  * POST /api/v1/shipments/:id/pod: capture proof of delivery (arrived → delivered).
  */
-export const capturePod = catchAsync(async (req, res, next) => {
-  const { shipment, ctx } = await getShipmentWithContext(req.params.id, req);
-
-  if (!shipment) return next(new AppError("Shipment not found.", notFound));
-  if (!ctx.isCarrierCoordinator && !ctx.isAssignedDriver) {
-    return next(
-      new AppError("Only the carrier's coordinators or the assigned driver can capture POD.", forbidden),
-    );
-  }
-  if (shipment.status !== "arrived") {
-    return next(new AppError("POD can only be captured once the shipment has arrived.", badRequest));
-  }
+export const capturePod = catchAsync(async (req, res) => {
+  const { shipment } = req;
 
   const { podRecipientName, podNotes } = req.body;
 
@@ -432,7 +387,8 @@ export const capturePod = catchAsync(async (req, res, next) => {
     description: `POD captured for ${shipment.reference}, received by ${podRecipientName}`,
   });
 
-  return successResponse(res, ok, { shipment });
+  // The assigned driver may capture POD, so the response follows their visibility.
+  return successResponse(res, ok, { shipment: presentShipment(shipment, req.access) });
 });
 
 /**
@@ -440,17 +396,7 @@ export const capturePod = catchAsync(async (req, res, next) => {
  * Closure rule: POD captured + no open exceptions.
  */
 export const completeShipment = catchAsync(async (req, res, next) => {
-  const { shipment, ctx } = await getShipmentWithContext(req.params.id, req);
-
-  if (!shipment) return next(new AppError("Shipment not found.", notFound));
-  if (!ctx.isShipperCoordinator) {
-    return next(
-      new AppError("Only a shipper owner or coordinator can complete the shipment.", forbidden),
-    );
-  }
-  if (shipment.status !== "delivered") {
-    return next(new AppError("Only delivered shipments can be completed.", badRequest));
-  }
+  const { shipment } = req;
 
   const openExceptions = await shipment_exceptions.count({
     where: { shipmentId: shipment.id, status: ["open", "investigating"] },
