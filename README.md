@@ -105,10 +105,10 @@ The interface is a role-aware operations workspace: a fixed sidebar whose naviga
 | | |
 |---|---|
 | ![Landing page](docs/screenshots/01-landing.jpg) **Landing page** | ![Sign in](docs/screenshots/02-sign-in.jpg) **Sign in** (NextAuth credentials) |
-| ![Shipper overview](docs/screenshots/03-shipper-overview.jpg) **Shipper overview:** status counters and items needing attention | ![Shipments list](docs/screenshots/04-shipments-list.jpg) **Shipments list** filtered by lifecycle status |
+| ![Shipper overview](docs/screenshots/03-shipper-overview.jpg) **Shipper overview:** status counters and a map of ongoing shipments with their routes and reported milestones | ![Shipments list](docs/screenshots/04-shipments-list.jpg) **Shipments list:** search and filter by lifecycle status |
 | ![New shipment](docs/screenshots/05-new-shipment.jpg) **New shipment:** cross-border toggle extends the document checklist | ![Shipment timeline](docs/screenshots/06-shipment-timeline.jpg) **Structured timeline:** manual and system events on the corridor |
-| ![Document gate](docs/screenshots/07-document-gate.jpg) **Document Gate:** assignment blocked until mandatory documents are verified | ![Coordinator overview](docs/screenshots/08-coordinator-overview.jpg) **Coordinator overview** (carrier side, with Fleet in the nav) |
-| ![Shipment assignment](docs/screenshots/09-shipment-assignment.jpg) **Shipment workspace:** route, parties, execution and recipient | ![Fleet compliance](docs/screenshots/10-fleet-compliance.jpg) **Fleet:** insurance, inspection and Yellow Card expiry feed the Compliance Gate |
+| ![Document gate](docs/screenshots/07-document-gate.jpg) **Document Gate:** assignment blocked until every mandatory document is in place | ![Compliance gate](docs/screenshots/08-compliance-gate.jpg) **Compliance Gate:** live preview blocks an expired-insurance truck and an expired-licence driver; overriding needs a written reason |
+| ![Shipment workspace](docs/screenshots/09-shipment-workspace.jpg) **Shipment workspace:** route map, key facts and lifecycle progress | ![Fleet compliance](docs/screenshots/10-fleet-compliance.jpg) **Fleet:** insurance, inspection and Yellow Card expiry feed the Compliance Gate |
 | ![Admin dashboard](docs/screenshots/11-admin-dashboard.jpg) **Platform admin dashboard** | ![Swagger API docs](docs/screenshots/12-swagger-api-docs.jpg) **Swagger UI** for the REST API |
 
 ## Getting started
