@@ -7,6 +7,15 @@ module.exports = (sequelize, DataTypes) => {
       this.belongsTo(shipments, { foreignKey: "shipmentId", as: "shipment" });
       this.belongsTo(users, { foreignKey: "recordedByUserId", as: "recordedBy" });
     }
+
+    /** Storage details stay server-side; clients get `hasProof` and fetch a signed link. */
+    toJSON() {
+      const values = { ...this.get() };
+      values.hasProof = Boolean(values.proofFileKey);
+      delete values.proofFileKey;
+      delete values.proofResourceType;
+      return values;
+    }
   }
 
   shipment_payments.init(
@@ -43,6 +52,10 @@ module.exports = (sequelize, DataTypes) => {
       },
       proofFileName: DataTypes.STRING,
       proofUrl: DataTypes.STRING,
+      proofFileKey: DataTypes.STRING,
+      proofResourceType: DataTypes.STRING,
+      proofMimeType: DataTypes.STRING,
+      proofFileSize: DataTypes.INTEGER,
       notes: DataTypes.TEXT,
       recordedByUserId: {
         type: DataTypes.INTEGER,

@@ -8,6 +8,19 @@ module.exports = (sequelize, DataTypes) => {
       this.belongsTo(users, { foreignKey: "uploadedByUserId", as: "uploadedBy" });
       this.belongsTo(users, { foreignKey: "verifiedByUserId", as: "verifiedBy" });
     }
+
+    /**
+     * Storage details stay server-side; clients get `hasFile` and fetch a signed link.
+     * `fileUrl` only holds legacy and seeded links, which would bypass that check.
+     */
+    toJSON() {
+      const values = { ...this.get() };
+      values.hasFile = Boolean(values.fileKey);
+      delete values.fileKey;
+      delete values.fileResourceType;
+      delete values.fileUrl;
+      return values;
+    }
   }
 
   shipment_documents.init(
@@ -31,6 +44,10 @@ module.exports = (sequelize, DataTypes) => {
       },
       fileName: DataTypes.STRING,
       fileUrl: DataTypes.STRING,
+      fileKey: DataTypes.STRING,
+      fileResourceType: DataTypes.STRING,
+      fileMimeType: DataTypes.STRING,
+      fileSize: DataTypes.INTEGER,
       status: {
         type: DataTypes.ENUM("required", "uploaded", "verified", "rejected"),
         allowNull: false,

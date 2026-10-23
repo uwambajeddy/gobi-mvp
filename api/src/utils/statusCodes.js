@@ -6,7 +6,10 @@ const codes = {
   forbidden: 403,
   notFound: 404,
   conflict: 409,
+  tooManyRequests: 429,
   serverError: 500,
+  badGateway: 502,
+  serviceUnavailable: 503,
 };
 
 export default codes;
