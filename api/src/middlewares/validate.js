@@ -25,3 +25,24 @@ export const validate = (schema) => {
     next();
   };
 };
+
+/**
+ * List-filter validation middleware factory. Each named query parameter must
+ * be one of its allowed values (repeating it filters by several); an absent
+ * or empty filter means "no filter", as before.
+ * @param {Record<string, string[]>} filters allowed values per query parameter
+ */
+export const validateFilters = (filters) => {
+  return (req, res, next) => {
+    for (const [name, allowed] of Object.entries(filters)) {
+      const raw = req.query[name];
+      if (raw === undefined || raw === "") continue;
+
+      const values = Array.isArray(raw) ? raw : [raw];
+      if (!values.every((value) => allowed.includes(value))) {
+        return next(new AppError(`Invalid ${name}: expected one of ${allowed.join(", ")}.`, badRequest));
+      }
+    }
+    next();
+  };
+};

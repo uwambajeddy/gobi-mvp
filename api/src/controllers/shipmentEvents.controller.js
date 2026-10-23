@@ -4,30 +4,26 @@ import catchAsync from "../utils/catchAsync";
 import { successResponse } from "../utils/responseHandlers";
 import { logActivity } from "../services/activityLog.service";
 import { ACTIVITY_ACTIONS } from "../utils/activityActions";
-import { getShipmentWithContext } from "../services/shipmentAccess.service";
+import { checkShipmentPolicy } from "../services/shipmentAccess.service";
+import { presentEvents } from "../services/shipmentVisibility.service";
 import { EVENT_STATUS_EFFECTS } from "../config/shipmentEvents";
 import db from "../database/models";
 
-const { ok, created, badRequest, notFound, forbidden } = statusCodes;
+// Routes run `authorizeShipment(action)` first, so handlers receive `req.shipment`
+// and `req.access`; recording is limited to OPERATIONAL_STATUSES there.
+const { ok, created, badRequest } = statusCodes;
 const { shipment_events, users } = db;
 
 const actorInclude = [
   { model: users, as: "actor", attributes: ["id", "firstName", "lastName"] },
 ];
 
-/** Window in which manual operational milestones may be recorded. */
-const OPERATIONAL_STATUSES = ["execution_assigned", "in_transit", "arrived", "delivered"];
-
 /**
  * GET /api/v1/shipments/:id/events: the operational timeline (newest first).
+ * Amounts on quote and payment events are left out for the assigned driver.
  */
-export const listEvents = catchAsync(async (req, res, next) => {
-  const { shipment, ctx } = await getShipmentWithContext(req.params.id, req, { include: [] });
-
-  if (!shipment) return next(new AppError("Shipment not found.", notFound));
-  if (!ctx.isParty) {
-    return next(new AppError("You are not a party to this shipment.", forbidden));
-  }
+export const listEvents = catchAsync(async (req, res) => {
+  const { shipment, access } = req;
 
   const events = await shipment_events.findAll({
     where: { shipmentId: shipment.id },
@@ -38,35 +34,26 @@ export const listEvents = catchAsync(async (req, res, next) => {
     ],
   });
 
-  return successResponse(res, ok, { events });
+  return successResponse(res, ok, { events: presentEvents(events, shipment, access) });
 });
 
 /**
  * POST /api/v1/shipments/:id/events: record a manual operational milestone.
  * The structured replacement for a WhatsApp message: who, what, when, where,
  * evidence. Events with a lifecycle effect (picked_up, arrived_destination)
- * also advance the shipment status.
+ * also advance the shipment status, so only the carrier's coordinators and
+ * the assigned driver may record them.
  */
 export const recordEvent = catchAsync(async (req, res, next) => {
-  const { shipment, ctx } = await getShipmentWithContext(req.params.id, req, { include: [] });
-
-  if (!shipment) return next(new AppError("Shipment not found.", notFound));
-  if (!ctx.isShipper && !ctx.isCarrier && !ctx.isAgent && !ctx.isAssignedDriver) {
-    return next(new AppError("Only shipment parties can record events.", forbidden));
-  }
-  if (!OPERATIONAL_STATUSES.includes(shipment.status)) {
-    return next(
-      new AppError(
-        "Operational events can only be recorded once a vehicle and driver are assigned.",
-        badRequest,
-      ),
-    );
-  }
-
+  const { shipment, access } = req;
   const { eventType, occurredAt, locationName, notes, metadata } = req.body;
 
-  // Lifecycle-advancing events must respect the state machine.
+  // Lifecycle-advancing events must come from the carrier and respect the state machine.
   const effect = EVENT_STATUS_EFFECTS[eventType];
+  if (effect) {
+    const denied = checkShipmentPolicy("recordStatusMilestone", shipment, access);
+    if (denied) return next(denied);
+  }
   if (effect && !effect.from.includes(shipment.status)) {
     return next(
       new AppError(

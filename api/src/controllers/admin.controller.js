@@ -4,9 +4,11 @@ import catchAsync from "../utils/catchAsync";
 import { successResponse } from "../utils/responseHandlers";
 import { logActivity } from "../services/activityLog.service";
 import { ACTIVITY_ACTIONS } from "../utils/activityActions";
+import { notifyDriverProfileReviewed } from "../services/notifications.service";
+import { isValidId } from "../middlewares/validateId";
 import db from "../database/models";
 
-const { ok, notFound } = statusCodes;
+const { ok, notFound, badRequest } = statusCodes;
 const {
   users,
   organizations,
@@ -59,6 +61,7 @@ export const reviewDriverProfile = catchAsync(async (req, res, next) => {
     description: `${req.body.status === "approved" ? "Approved" : "Rejected"} driver ${profile.user?.email}`,
     metadata: { status: req.body.status },
   });
+  notifyDriverProfileReviewed({ userId: profile.userId, status: req.body.status, actorUserId: req.user.id });
 
   return successResponse(res, ok, { driverProfile: profile });
 });
@@ -82,7 +85,13 @@ export const listOrganizations = catchAsync(async (req, res) => {
  * GET /api/v1/admin/activity-logs: the platform audit trail.
  * Filterable by entity, action and actor; newest first.
  */
-export const getActivityLogs = catchAsync(async (req, res) => {
+export const getActivityLogs = catchAsync(async (req, res, next) => {
+  for (const filter of ["entityId", "actorId"]) {
+    if (req.query[filter] !== undefined && !isValidId(req.query[filter])) {
+      return next(new AppError(`Invalid ${filter}: expected a positive whole number.`, badRequest));
+    }
+  }
+
   const where = {};
   if (req.query.entityType) where.entityType = req.query.entityType;
   if (req.query.entityId) where.entityId = req.query.entityId;
