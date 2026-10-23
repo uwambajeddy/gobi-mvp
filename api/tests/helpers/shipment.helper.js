@@ -1,4 +1,5 @@
 import { asUser, loginAs, PERSONAS, SEED } from "./auth.helper";
+import { pdfFile } from "./files.helper";
 
 export const createShipment = async (shipperTokens, overrides = {}) => {
   const res = await asUser(shipperTokens).post("/api/v1/shipments", {
@@ -23,11 +24,11 @@ export const uploadAllMandatoryDocs = async (tokens, shipmentId) => {
 
   for (const doc of documents) {
     if (doc.mandatory && !["uploaded", "verified"].includes(doc.status)) {
-      const res = await asUser(tokens).post(`/api/v1/shipments/${shipmentId}/documents`, {
-        docType: doc.docType,
-        fileName: `${doc.docType}.pdf`,
-        fileUrl: `https://files.gobi.local/test/${doc.docType}.pdf`,
-      });
+      const res = await asUser(tokens).upload(
+        `/api/v1/shipments/${shipmentId}/documents`,
+        { docType: doc.docType },
+        pdfFile(`${doc.docType}.pdf`),
+      );
       if (res.status !== 201) {
         throw new Error(`upload ${doc.docType} failed: ${JSON.stringify(res.body)}`);
       }
