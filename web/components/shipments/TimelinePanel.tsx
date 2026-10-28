@@ -42,11 +42,9 @@ import { Callout } from "@/components/ui/feedback";
 import { EmptyState, ErrorState, ListSkeleton } from "@/components/common/States";
 import { handleApiError } from "@/lib/handleApiError";
 import { EVENT_LABELS, MANUAL_EVENT_TYPES } from "@/lib/labels";
+import { DRIVER_MILESTONES } from "@/lib/shipments";
 import { cn, formatDateTime, formatRelative, fullName } from "@/lib/utils";
 import { Shipment, ShipmentAccess, ShipmentEvent } from "@/types";
-
-/** Milestones that advance the shipment status (mirrors the API's EVENT_STATUS_EFFECTS). */
-const STATUS_MILESTONES = ["picked_up", "arrived_destination"];
 
 const TONE_TILE = {
   success: "bg-success-soft text-success-fg ring-success-line",
@@ -128,9 +126,11 @@ export function TimelinePanel({
   });
 
   const canRecord = Boolean(access.can?.recordEvent);
-  // Pickup and arrival move the status, so only the carrier's coordinators and the assigned driver see them.
+  // The driver's progress steps belong to the carrier's coordinators and the
+  // assigned driver, who taps them on the progress card rather than picking them here.
   const eventTypes = MANUAL_EVENT_TYPES.filter(
-    (type) => access.can?.recordStatusMilestone || !STATUS_MILESTONES.includes(type),
+    (type) =>
+      !DRIVER_MILESTONES.includes(type) || (access.can?.recordStatusMilestone && !access.isAssignedDriver),
   );
 
   return (
@@ -140,7 +140,11 @@ export function TimelinePanel({
           <CardHeader className={cn(!formOpen && "pb-5")}>
             <div>
               <CardTitle>Record an operational milestone</CardTitle>
-              <CardDescription>Pickup, checkpoints, borders, customs, warehouse and arrival.</CardDescription>
+              <CardDescription>
+                {access.isAssignedDriver
+                  ? "Checkpoints, fuel stops, borders, customs and warehouse stops."
+                  : "Pickup, checkpoints, borders, customs, warehouse and arrival."}
+              </CardDescription>
             </div>
             <Button
               variant={formOpen ? "ghost" : "default"}

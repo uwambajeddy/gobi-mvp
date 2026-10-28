@@ -7,6 +7,7 @@ import useAxiosAuth from "@/hooks/useAxiosAuth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { PageHeader } from "@/components/common/PageHeader";
+import { RoleEmblem } from "@/components/common/RoleEmblem";
 import { StatCard } from "@/components/common/StatCard";
 import { BarList } from "@/components/common/BarList";
 import { ErrorState, ListSkeleton } from "@/components/common/States";
@@ -76,6 +77,7 @@ export default function AdminDashboardPage() {
   return (
     <>
       <PageHeader
+        leading={<RoleEmblem className="mt-1" />}
         eyebrow="Administration"
         title="Platform overview"
         description="Operational health across every organization on Gobi."

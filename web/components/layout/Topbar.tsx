@@ -9,6 +9,8 @@ import { useActiveOrg } from "@/hooks/useActiveOrg";
 import { Button } from "@/components/ui/button";
 import { LogoMark } from "@/components/common/Logo";
 import { AccountMenu } from "@/components/layout/AccountMenu";
+import { NotificationsMenu } from "@/components/layout/NotificationsMenu";
+import { LocationSharingMenu } from "@/components/driver/LocationSharingMenu";
 import { crumbsFor } from "@/components/layout/nav";
 
 export function Topbar({ onOpenMenu }: { onOpenMenu: () => void }) {
@@ -28,6 +30,8 @@ export function Topbar({ onOpenMenu }: { onOpenMenu: () => void }) {
 
   return (
     <header className="sticky top-0 z-30 border-b border-transparent bg-canvas/85 backdrop-blur-md supports-[backdrop-filter]:bg-canvas/70">
+      {/* Phones hide the sidebar, so a strip of the role's colour stands in for it. */}
+      <div aria-hidden className="h-[3px] bg-role-accent transition-colors duration-500 lg:hidden" />
       <div className="mx-auto flex h-topbar w-full max-w-content items-center gap-3 px-4 md:px-6 xl:px-8">
         <Button variant="outline" size="icon" className="lg:hidden" aria-label="Open navigation" onClick={onOpenMenu}>
           <Menu />
@@ -67,6 +71,8 @@ export function Topbar({ onOpenMenu }: { onOpenMenu: () => void }) {
               </Link>
             </Button>
           )}
+          <LocationSharingMenu />
+          <NotificationsMenu />
           <AccountMenu variant="topbar" />
         </div>
       </div>

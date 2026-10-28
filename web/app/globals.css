@@ -40,6 +40,73 @@
     --info-fg: 29 78 216;
     --info-soft: 239 246 255;
     --info-line: 191 219 254;
+
+    /*
+     * Role livery: like hi-vis vests on a depot floor, each workspace wears
+     * its role's colour on the chrome (sidebar, active navigation, avatar,
+     * page eyebrow). Actions, focus and status colours stay the same for all.
+     * Set by `data-role` on the app shell (see lib/roleTheme.ts); the
+     * defaults are Gobi's own navy and orange.
+     *   rail       sidebar base          accent     vivid mark on the rail
+     *   on-accent  icon on an accent tile soft / ink light tint + text on light surfaces
+     */
+    --role-rail: 15 26 51;
+    --role-accent: 243 106 70;
+    --role-on-accent: 255 255 255;
+    --role-soft: 252 231 222;
+    --role-ink: 169 62 38;
+    /* Strength of the accent contour lines; brighter accents need less. */
+    --role-contour: 0.36;
+  }
+
+  /* Shipper: Gobi orange on navy, the brand's own customer. */
+  [data-role="shipper"] {
+    --role-rail: 15 26 51;
+    --role-accent: 243 106 70;
+    --role-on-accent: 255 255 255;
+    --role-soft: 252 231 222;
+    --role-ink: 169 62 38;
+    --role-contour: 0.36;
+  }
+
+  /* Carrier operations: dispatch cyan on deep petrol. */
+  [data-role="carrier"] {
+    --role-rail: 11 39 51;
+    --role-accent: 46 196 222;
+    --role-on-accent: 15 26 51;
+    --role-soft: 211 244 249;
+    --role-ink: 11 106 128;
+    --role-contour: 0.34;
+  }
+
+  /* Driver: hi-vis yellow on asphalt. */
+  [data-role="driver"] {
+    --role-rail: 25 30 19;
+    --role-accent: 215 239 62;
+    --role-on-accent: 15 26 51;
+    --role-soft: 238 248 198;
+    --role-ink: 77 106 8;
+    --role-contour: 0.28;
+  }
+
+  /* Clearing agent: customs-stamp violet. */
+  [data-role="agent"] {
+    --role-rail: 28 23 51;
+    --role-accent: 154 124 248;
+    --role-on-accent: 15 26 51;
+    --role-soft: 236 230 254;
+    --role-ink: 90 60 192;
+    --role-contour: 0.38;
+  }
+
+  /* Platform admin: silver on graphite. */
+  [data-role="admin"] {
+    --role-rail: 21 24 30;
+    --role-accent: 213 222 234;
+    --role-on-accent: 15 26 51;
+    --role-soft: 230 235 242;
+    --role-ink: 51 65 85;
+    --role-contour: 0.22;
   }
 
   /* Keep focused / scrolled-to elements clear of the sticky top bar. */
@@ -135,6 +202,24 @@
     background-repeat: no-repeat;
     background-position: center bottom;
     background-size: 100% auto;
+  }
+
+  /*
+   * The same contour lines drawn in the role's accent: the texture is used
+   * as a mask over a solid fill, fading out toward the top of the rail.
+   */
+  .contours-role {
+    background-color: rgb(var(--role-accent));
+    -webkit-mask-image: url("/textures/contours.svg"), linear-gradient(to top, black 35%, transparent 95%);
+    mask-image: url("/textures/contours.svg"), linear-gradient(to top, black 35%, transparent 95%);
+    -webkit-mask-size: 100% auto, 100% 100%;
+    mask-size: 100% auto, 100% 100%;
+    -webkit-mask-position: center bottom, center;
+    mask-position: center bottom, center;
+    -webkit-mask-repeat: no-repeat;
+    mask-repeat: no-repeat;
+    -webkit-mask-composite: source-in;
+    mask-composite: intersect;
   }
 
   /* Native checkbox styled to the system. */
