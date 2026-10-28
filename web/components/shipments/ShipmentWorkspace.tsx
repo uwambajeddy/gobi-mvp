@@ -19,11 +19,14 @@ import {
   Package,
   Phone,
   Receipt,
+  RefreshCw,
   Route,
   Scale,
   Truck,
   UserRound,
   Users,
+  Wifi,
+  WifiOff,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import useAxiosAuth from "@/hooks/useAxiosAuth";
@@ -38,17 +41,26 @@ import { Meter, Skeleton } from "@/components/ui/feedback";
 import { ShipmentMap } from "@/components/maps/ShipmentMap";
 import { CountryTag, RouteDistance } from "@/components/maps/RouteFacts";
 import { useMilestonePins, useShipmentGeo } from "@/hooks/useShipmentGeo";
+import { LatestLocation, useShipmentLiveLocation } from "@/hooks/useShipmentLiveLocation";
+import { useSocket } from "@/context/SocketContext";
 import { TabPanel, Tabs } from "@/components/ui/tabs";
 import { ShipmentStatusBadge } from "@/components/common/StatusBadge";
 import { ErrorState } from "@/components/common/States";
 import { LifecycleStepper } from "@/components/shipments/LifecycleStepper";
 import { TimelinePanel } from "@/components/shipments/TimelinePanel";
+import { DRIVER_PROGRESS_STATUSES, DriverProgress } from "@/components/shipments/DriverProgress";
 import { DocumentsPanel } from "@/components/shipments/DocumentsPanel";
 import { AssignmentPanel } from "@/components/shipments/AssignmentPanel";
 import { PaymentsPanel } from "@/components/shipments/PaymentsPanel";
 import { ExceptionsPanel } from "@/components/shipments/ExceptionsPanel";
 import { handleApiError } from "@/lib/handleApiError";
-import { ACTIVE_STATUSES, CANCELLABLE_STATUSES, cargoWeightKg, nextStepHint } from "@/lib/shipments";
+import {
+  ACTIVE_STATUSES,
+  CANCELLABLE_STATUSES,
+  cargoWeightKg,
+  isTrackingActive,
+  nextStepHint,
+} from "@/lib/shipments";
 import { cn, formatDate, formatDateTime, formatPrice, formatRelative, fullName } from "@/lib/utils";
 import {
   Organization,
@@ -246,11 +258,8 @@ function tabHint(shipment: Shipment, access: ShipmentAccess): { text: string; ta
   if (party && shipment.status === "awaiting_documents") {
     return { text: "Upload the outstanding documents in the Documents tab.", tab: "documents", cta: "Open documents" };
   }
-  if (
-    (party || access.isAssignedDriver) &&
-    ["execution_assigned", "in_transit", "arrived"].includes(shipment.status)
-  ) {
-    return { text: "Record pickup, corridor milestones and arrival on the Timeline tab.", tab: "timeline", cta: "Record milestone" };
+  if (party && ["execution_assigned", "in_transit", "arrived"].includes(shipment.status)) {
+    return { text: "Log checkpoints, border crossings and customs on the Timeline tab.", tab: "timeline", cta: "Record milestone" };
   }
   return null;
 }
@@ -328,7 +337,7 @@ function LifecycleActions({
       run: () => simpleAction.mutate("approve-quote"),
     });
   }
-  if ((access.isCarrierCoordinator || access.isAssignedDriver) && shipment.status === "arrived") {
+  if (access.isCarrierCoordinator && shipment.status === "arrived") {
     actions.push({ key: "pod", label: "Capture POD", variant: "default" });
   }
   if (access.isShipperCoordinator && shipment.status === "delivered") {
@@ -654,10 +663,82 @@ function RouteEndpoints({ shipment }: { shipment: Shipment }) {
   );
 }
 
-/** Planned route plus every place reported on the timeline. */
+function LiveTrackingStatus({
+  location,
+  isStale,
+  onRefresh,
+}: {
+  location: LatestLocation | null;
+  isStale: boolean;
+  onRefresh: () => Promise<void>;
+}) {
+  const { connected } = useSocket();
+  const [refreshing, setRefreshing] = useState(false);
+  const [, force] = useState(0);
+
+  useEffect(() => {
+    const id = setInterval(() => force((n) => n + 1), 10_000);
+    return () => clearInterval(id);
+  }, []);
+
+  const refresh = async () => {
+    setRefreshing(true);
+    await onRefresh();
+    setRefreshing(false);
+  };
+
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 px-1 text-caption">
+      <p className="flex min-w-0 items-center gap-1.5 text-ink-secondary" aria-live="polite">
+        <span
+          aria-hidden
+          className={cn(
+            "h-2 w-2 shrink-0 rounded-full",
+            !location ? "animate-pulse bg-ink-subtle" : isStale ? "bg-warning" : "animate-pulse bg-success",
+          )}
+        />
+        {location ? (
+          <span className="truncate">
+            <span className={cn("font-semibold", isStale ? "text-warning-fg" : "text-ink")}>
+              {isStale ? "Location may be outdated" : "Driver location active"}
+            </span>{" "}
+            · updated {formatRelative(new Date(location.updatedAt).toISOString())}
+          </span>
+        ) : (
+          <span className="text-ink-muted">Waiting for driver location…</span>
+        )}
+      </p>
+      <div className="flex shrink-0 items-center gap-1">
+        <Badge variant={connected ? "success" : "secondary"}>
+          {connected ? <Wifi className="h-3 w-3" aria-hidden /> : <WifiOff className="h-3 w-3" aria-hidden />}
+          {connected ? "Live" : "Polling"}
+        </Badge>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          aria-label="Refresh driver location"
+          title="Refresh location"
+          disabled={refreshing}
+          onClick={refresh}
+        >
+          <RefreshCw className={cn(refreshing && "animate-spin")} />
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 function HeaderRouteMap({ shipment }: { shipment: Shipment }) {
   const axios = useAxiosAuth();
   const geo = useShipmentGeo(shipment);
+  const isTracking = isTrackingActive(shipment);
+  const live = useShipmentLiveLocation({
+    shipmentId: shipment.id,
+    initial: shipment.currentLocation
+      ? { ...shipment.currentLocation, updatedAt: shipment.lastLocationUpdate }
+      : null,
+    enabled: isTracking,
+  });
   const { data: events } = useQuery({
     queryKey: ["shipment-events", String(shipment.id)],
     queryFn: async () =>
@@ -678,8 +759,11 @@ function HeaderRouteMap({ shipment }: { shipment: Shipment }) {
         geo={geo}
         pins={milestones.pins}
         pinsUnresolved={milestones.unresolved}
+        driverLocation={isTracking ? live.location : null}
+        driverIsStale={live.isStale}
         className="h-64 rounded-inset border border-line/70 xl:h-auto xl:min-h-[18rem] xl:flex-1"
       />
+      {isTracking && <LiveTrackingStatus location={live.location} isStale={live.isStale} onRefresh={live.refresh} />}
       <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 px-1 text-caption">
         <p className="flex min-w-0 items-center gap-1.5 text-ink-secondary">
           <Navigation className="h-3.5 w-3.5 shrink-0 text-primary-500" aria-hidden />
@@ -772,6 +856,7 @@ export default function ShipmentWorkspace({ id }: { id: string }) {
   const mandatory = documents.filter((doc) => doc.mandatory);
   const satisfied = mandatory.filter((doc) => ["uploaded", "verified"].includes(doc.status));
   const canSeeMoney = Boolean(access.can?.viewFinancials);
+  const showDriverProgress = Boolean(shipment.assignedDriverId) && DRIVER_PROGRESS_STATUSES.includes(shipment.status);
 
   const meta: { icon: typeof Package; label: string; value: React.ReactNode; hint?: string }[] = [
     ...(canSeeMoney
@@ -875,14 +960,18 @@ export default function ShipmentWorkspace({ id }: { id: string }) {
         </div>
       </Card>
 
-      <LifecycleActions
-        data={data}
-        onChanged={refresh}
-        onOpenTab={(next) => {
-          setTab(next);
-          setFocusTab(next);
-        }}
-      />
+      {showDriverProgress && <DriverProgress shipment={shipment} access={access} onChanged={refresh} />}
+
+      {!(showDriverProgress && access.isAssignedDriver) && (
+        <LifecycleActions
+          data={data}
+          onChanged={refresh}
+          onOpenTab={(next) => {
+            setTab(next);
+            setFocusTab(next);
+          }}
+        />
+      )}
 
       <div className="mt-5 grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_22rem]">
         <div className="min-w-0">

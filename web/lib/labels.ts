@@ -46,6 +46,7 @@ export const EVENT_LABELS: Record<string, string> = {
   shipment_completed: "Shipment completed",
   shipment_cancelled: "Shipment cancelled",
   en_route_to_pickup: "En route to pickup",
+  arrived_pickup: "Arrived at pickup",
   picked_up: "Cargo picked up",
   departed_origin: "Departed origin",
   checkpoint: "Checkpoint passed",
@@ -63,6 +64,7 @@ export const EVENT_LABELS: Record<string, string> = {
 
 export const MANUAL_EVENT_TYPES = [
   "en_route_to_pickup",
+  "arrived_pickup",
   "picked_up",
   "departed_origin",
   "checkpoint",

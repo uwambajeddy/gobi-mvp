@@ -80,6 +80,10 @@ module.exports = (sequelize, DataTypes) => {
       podRecipientName: DataTypes.STRING,
       podNotes: DataTypes.TEXT,
       podCapturedAt: DataTypes.DATE,
+      startTime: DataTypes.DATE,
+      currentLocation: DataTypes.JSONB,
+      lastLocationUpdate: DataTypes.DATE,
+      trackings: DataTypes.ARRAY(DataTypes.JSONB),
     },
     {
       sequelize,

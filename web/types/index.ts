@@ -135,6 +135,9 @@ export interface Shipment {
   podRecipientName?: string | null;
   podNotes?: string | null;
   podCapturedAt?: string | null;
+  startTime?: string | null;
+  currentLocation?: { lat: number; lng: number } | null;
+  lastLocationUpdate?: string | null;
   distributionOrg?: Organization;
   transportOrg?: Organization | null;
   clearingAgentOrg?: Organization | null;
@@ -221,6 +224,25 @@ export interface ShipmentAccess {
   isAgentCoordinator: boolean;
   isParty: boolean;
   can?: Record<string, boolean>;
+}
+
+export interface AppNotification {
+  id: number;
+  title: string;
+  content?: string | null;
+  isRead: boolean;
+  actionUrl?: string | null;
+  entityType?: string | null;
+  entityId?: number | null;
+  createdAt: string;
+}
+
+export interface ShipmentStatusUpdate {
+  shipmentId: number;
+  status: ShipmentStatus;
+  eventType: string;
+  actorUserId: number;
+  message: string;
 }
 
 export interface DocumentGateResult {

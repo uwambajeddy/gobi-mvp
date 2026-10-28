@@ -5,6 +5,8 @@ import { successResponse } from "../utils/responseHandlers";
 import { logActivity } from "../services/activityLog.service";
 import { ACTIVITY_ACTIONS } from "../utils/activityActions";
 import { recordSystemEvent } from "../services/shipmentEvents.service";
+import { notifyShipmentStatusChange } from "../utils/shipmentStatusNotifications";
+import { emitToShipmentParties } from "../utils/socket.io";
 import { evaluateDocumentGate } from "../services/documentGate.service";
 import {
   evaluateComplianceGate,
@@ -160,6 +162,15 @@ export const assignExecution = catchAsync(async (req, res, next) => {
       overrideReason: overrideReason || null,
       warnings: complianceGate.warnings,
     },
+  });
+
+  await notifyShipmentStatusChange("execution_assigned", shipment, { actorUserId: req.user.id });
+  await emitToShipmentParties(shipment, "shipmentStatusUpdate", {
+    shipmentId: shipment.id,
+    status: shipment.status,
+    eventType: "execution_assigned",
+    actorUserId: req.user.id,
+    message: `${shipment.reference}: Vehicle and driver assigned`,
   });
 
   return successResponse(res, ok, {

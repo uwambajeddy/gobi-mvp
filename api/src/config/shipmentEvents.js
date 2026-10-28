@@ -22,6 +22,7 @@ const SYSTEM_EVENT_TYPES = [
 
 const MANUAL_EVENT_TYPES = [
   "en_route_to_pickup",
+  "arrived_pickup",
   "picked_up",
   "departed_origin",
   "checkpoint",
@@ -39,7 +40,9 @@ const MANUAL_EVENT_TYPES = [
 
 const EVENT_TYPES = [...SYSTEM_EVENT_TYPES, ...MANUAL_EVENT_TYPES];
 
-const EVENT_STATUS_EFFECTS = {
+const DRIVER_MILESTONES = {
+  en_route_to_pickup: { from: ["execution_assigned"] },
+  arrived_pickup: { from: ["execution_assigned"] },
   picked_up: { from: ["execution_assigned"], to: "in_transit" },
   arrived_destination: { from: ["in_transit"], to: "arrived" },
 };
@@ -63,6 +66,7 @@ const EVENT_LABELS = {
   shipment_completed: "Shipment completed",
   shipment_cancelled: "Shipment cancelled",
   en_route_to_pickup: "En route to pickup",
+  arrived_pickup: "Arrived at pickup",
   picked_up: "Cargo picked up",
   departed_origin: "Departed origin",
   checkpoint: "Checkpoint passed",
@@ -82,6 +86,6 @@ module.exports = {
   SYSTEM_EVENT_TYPES,
   MANUAL_EVENT_TYPES,
   EVENT_TYPES,
-  EVENT_STATUS_EFFECTS,
+  DRIVER_MILESTONES,
   EVENT_LABELS,
 };

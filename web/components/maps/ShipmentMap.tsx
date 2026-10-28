@@ -12,7 +12,7 @@ import {
   useApiLoadingStatus,
   useMap,
 } from "@vis.gl/react-google-maps";
-import { AlertTriangle, Info, Loader2, MapPinOff } from "lucide-react";
+import { AlertTriangle, Info, Loader2, MapPinOff, Truck } from "lucide-react";
 
 import { cn, formatDateTime, formatRelative } from "@/lib/utils";
 import { GOOGLE_MAPS_API_KEY, GOOGLE_MAPS_MAP_ID, LatLng, mapsEnabled } from "@/lib/maps";
@@ -22,6 +22,8 @@ const EAST_AFRICA: LatLng = { lat: -2.5, lng: 33.5 };
 const ROUTE_COLOR = "#F36A46";
 
 type Padding = { top: number; right: number; bottom: number; left: number };
+
+const DEFAULT_PADDING: Padding = { top: 56, right: 56, bottom: 56, left: 56 };
 
 function EndpointPin({ letter, label, tone }: { letter: string; label: string; tone: "pickup" | "dropoff" }) {
   return (
@@ -70,6 +72,22 @@ function MilestoneDot({ pin }: { pin: MilestonePin }) {
   );
 }
 
+function DriverPin({ stale }: { stale?: boolean }) {
+  return (
+    <span className="relative flex h-9 w-9 items-center justify-center">
+      {!stale && <span aria-hidden className="absolute inset-0 animate-ping rounded-full bg-info/40" />}
+      <span
+        className={cn(
+          "relative flex h-9 w-9 items-center justify-center rounded-full border-2 border-white text-white shadow-md",
+          stale ? "bg-ink-muted" : "bg-ink",
+        )}
+      >
+        <Truck className="h-4 w-4" aria-hidden />
+      </span>
+    </span>
+  );
+}
+
 const pinTitle = (pin: MilestonePin) =>
   `${pin.index}. ${pin.locationName}: ${pin.events.map((e) => e.label).join(", ")} · last ${formatDateTime(
     pin.lastReportedAt,
@@ -91,6 +109,27 @@ function FitBounds({ points, padding }: { points: LatLng[]; padding: Padding }) 
     map.fitBounds(bounds, padding);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [map, signature, padding.top, padding.right, padding.bottom, padding.left]);
+
+  return null;
+}
+
+function FollowDriver({ position, points, padding }: { position?: LatLng | null; points: LatLng[]; padding: Padding }) {
+  const map = useMap();
+
+  useEffect(() => {
+    if (!map || !position) return;
+    const visible = map.getBounds();
+    if (visible && visible.contains(position)) return;
+    if (points.length === 0) {
+      map.setCenter(position);
+      map.setZoom(10);
+      return;
+    }
+    const bounds = new google.maps.LatLngBounds();
+    [...points, position].forEach((p) => bounds.extend(p));
+    map.fitBounds(bounds, padding);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [map, position?.lat, position?.lng]);
 
   return null;
 }
@@ -117,13 +156,15 @@ interface ShipmentMapProps {
   geo: ShipmentGeo;
   pins?: MilestonePin[];
   pinsUnresolved?: string[];
+  driverLocation?: LatLng | null;
+  driverIsStale?: boolean;
   className?: string;
   fitPadding?: Padding;
   children?: React.ReactNode;
   label: string;
 }
 
-function MapCanvas({ geo, pins = [], pinsUnresolved = [], fitPadding }: ShipmentMapProps) {
+function MapCanvas({ geo, pins = [], pinsUnresolved = [], driverLocation, driverIsStale, fitPadding }: ShipmentMapProps) {
   const status = useApiLoadingStatus();
   const { origin, destination, route } = geo;
 
@@ -232,8 +273,19 @@ function MapCanvas({ geo, pins = [], pinsUnresolved = [], fitPadding }: Shipment
             <MilestoneDot pin={pin} />
           </AdvancedMarker>
         ))}
+        {driverLocation && (
+          <AdvancedMarker
+            position={driverLocation}
+            anchorPoint={AdvancedMarkerAnchorPoint.CENTER}
+            title={driverIsStale ? "Driver location (may be outdated)" : "Driver location"}
+            zIndex={40}
+          >
+            <DriverPin stale={driverIsStale} />
+          </AdvancedMarker>
+        )}
 
-        <FitBounds points={fitPoints} padding={fitPadding ?? { top: 56, right: 56, bottom: 56, left: 56 }} />
+        <FitBounds points={fitPoints} padding={fitPadding ?? DEFAULT_PADDING} />
+        <FollowDriver position={driverLocation} points={fitPoints} padding={fitPadding ?? DEFAULT_PADDING} />
       </GoogleMap>
 
       {notices.length > 0 && (

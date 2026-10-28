@@ -35,7 +35,7 @@ export function AccountMenu({
   const trigger =
     variant === "topbar" ? (
       <span className="glass flex items-center gap-2 rounded-full py-1 pl-1 pr-1 transition-colors hover:bg-white/90 md:pr-3">
-        <Avatar firstName={user?.firstName} lastName={user?.lastName} size="sm" />
+        <Avatar firstName={user?.firstName} lastName={user?.lastName} size="sm" tone="role" />
         <span className="hidden text-left leading-tight md:block">
           <span className="block max-w-[10rem] truncate text-label font-semibold text-ink">{name}</span>
           <span className="block max-w-[10rem] truncate text-[0.6875rem] capitalize text-ink-muted">{roleLine}</span>
@@ -49,7 +49,7 @@ export function AccountMenu({
           collapsed && "justify-center",
         )}
       >
-        <Avatar firstName={user?.firstName} lastName={user?.lastName} />
+        <Avatar firstName={user?.firstName} lastName={user?.lastName} tone="role" />
         {!collapsed && (
           <>
             <span className="min-w-0 flex-1 leading-tight">

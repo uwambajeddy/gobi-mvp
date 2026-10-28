@@ -16,7 +16,8 @@ import { EmptyState } from "@/components/common/States";
 import { LifecycleStepper } from "@/components/shipments/LifecycleStepper";
 import { ShipmentMap } from "@/components/maps/ShipmentMap";
 import { CountryTag, RouteDistance } from "@/components/maps/RouteFacts";
-import { ACTIVE_STATUSES, cargoWeightKg } from "@/lib/shipments";
+import { type LatestLocation, useShipmentLiveLocation } from "@/hooks/useShipmentLiveLocation";
+import { ACTIVE_STATUSES, cargoWeightKg, isTrackingActive } from "@/lib/shipments";
 import { cn, formatPrice, formatRelative, fullName } from "@/lib/utils";
 import { Shipment, ShipmentEvent, ShipmentStatus } from "@/types";
 
@@ -116,11 +117,13 @@ function DetailsCard({
   shipment,
   geo,
   latest,
+  live,
   className,
 }: {
   shipment: Shipment;
   geo: ShipmentGeo;
   latest?: { locationName: string; label: string; at: string };
+  live?: { location: LatestLocation | null; isStale: boolean };
   className?: string;
 }) {
   const cargoKg = cargoWeightKg(shipment);
@@ -189,7 +192,16 @@ function DetailsCard({
       <div className="mt-3 flex flex-col gap-1.5 text-caption text-ink-secondary 2xl:flex-row 2xl:items-start 2xl:justify-between 2xl:gap-4">
         <p className="flex min-w-0 items-start gap-1.5">
           <Navigation className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary-500" aria-hidden />
-          {latest ? (
+          {live?.location ? (
+            <span>
+              <span className={cn("font-semibold", live.isStale ? "text-warning-fg" : "text-ink")}>
+                {live.isStale ? "Driver location may be outdated" : "Driver live on the map"}
+              </span>{" "}
+              · updated {formatRelative(new Date(live.location.updatedAt).toISOString())}
+            </span>
+          ) : live ? (
+            <span>Driver has set off. Waiting for their first location…</span>
+          ) : latest ? (
             <span>
               <span className="font-semibold text-ink">Last reported:</span> {latest.locationName} · {latest.label} ·{" "}
               {formatRelative(latest.at)}
@@ -240,6 +252,14 @@ export function OngoingShipmentsMap({
   });
 
   const geo = useShipmentGeo(selected);
+  const isTracking = Boolean(selected && isTrackingActive(selected));
+  const live = useShipmentLiveLocation({
+    shipmentId: selected?.id,
+    initial: selected?.currentLocation
+      ? { ...selected.currentLocation, updatedAt: selected.lastLocationUpdate }
+      : null,
+    enabled: isTracking,
+  });
   const milestones = useMilestonePins(selected ? events : [], {
     origin: geo.origin,
     destination: geo.destination,
@@ -257,7 +277,7 @@ export function OngoingShipmentsMap({
             <MapIcon className="h-[1.125rem] w-[1.125rem] text-primary-500" aria-hidden /> Ongoing shipments
           </CardTitle>
           <CardDescription>
-            Planned routes and the places reported on each timeline. Not live GPS.
+            Planned routes, the places reported on each timeline, and the driver live while they share their location.
           </CardDescription>
         </div>
         {!isLoading && ongoing.length > 0 && (
@@ -327,12 +347,15 @@ export function OngoingShipmentsMap({
                 geo={geo}
                 pins={milestones.pins}
                 pinsUnresolved={milestones.unresolved}
+                driverLocation={isTracking ? live.location : null}
+                driverIsStale={live.isStale}
                 fitPadding={isWide ? { top: 56, right: 64, bottom: 270, left: 56 } : undefined}
                 className="h-[24rem] md:h-[34rem]"
               />
               <DetailsCard
                 shipment={selected}
                 geo={geo}
+                live={isTracking ? { location: live.location, isStale: live.isStale } : undefined}
                 latest={
                   milestones.latest && latestEvent
                     ? { locationName: milestones.latest.locationName, label: latestEvent.label, at: latestEvent.occurredAt }

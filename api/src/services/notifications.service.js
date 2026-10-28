@@ -184,7 +184,7 @@ const SHIPMENT_RULES = {
         subject: `New assignment: ${shipment.reference}`,
         heading: "You've been assigned a shipment",
         paragraphs: [
-          `${shipment.transportOrg?.name} assigned you to drive "${shipment.title}". Record the pickup on the shipment timeline when you collect the cargo.`,
+          `${shipment.transportOrg?.name} assigned you to drive "${shipment.title}". Open the assignment and tap "Going to pickup" when you set off; the shipper can then follow the truck live.`,
         ],
         details: [["Vehicle", vehicle ? `${vehicle.plateNumber}${vehicle.model ? ` · ${vehicle.model}` : ""}` : null]],
         cta: "Open the assignment",
@@ -225,6 +225,32 @@ const SHIPMENT_RULES = {
       { ...message, to: await coordinatorsOf(shipment.clearingAgentOrgId), footnote: orgFootnote(shipment.clearingAgentOrg) },
     ];
   },
+
+  picked_up: async ({ shipment }) => [
+    {
+      to: await coordinatorsOf(shipment.distributionOrgId),
+      subject: `On its way: ${shipment.reference}`,
+      heading: "Your cargo was picked up",
+      paragraphs: [
+        `${fullName(shipment.assignedDriver) || "The driver"} picked up "${shipment.title}" and is heading to ${shipment.destinationAddress}. Follow the truck live on the shipment page.`,
+      ],
+      cta: "Track the shipment",
+      footnote: orgFootnote(shipment.distributionOrg),
+    },
+  ],
+
+  arrived_destination: async ({ shipment }) => [
+    {
+      to: await coordinatorsOf(shipment.distributionOrgId),
+      subject: `Arrived: ${shipment.reference}`,
+      heading: "Your cargo has arrived",
+      paragraphs: [
+        `"${shipment.title}" has arrived at ${shipment.destinationAddress}. The driver will record proof of delivery once it is handed over.`,
+      ],
+      cta: "Open the shipment",
+      footnote: orgFootnote(shipment.distributionOrg),
+    },
+  ],
 
   pod_captured: async ({ shipment, metadata }) => [
     {
