@@ -28,6 +28,7 @@ import { Input } from "@/components/ui/input";
 import { Field } from "@/components/ui/field";
 import { ShipmentStatusBadge } from "@/components/common/StatusBadge";
 import { PageHeader } from "@/components/common/PageHeader";
+import { RoleEmblem } from "@/components/common/RoleEmblem";
 import { StatCard } from "@/components/common/StatCard";
 import { BarList } from "@/components/common/BarList";
 import { OngoingShipmentsMap } from "@/components/maps/OngoingShipmentsMap";
@@ -397,6 +398,7 @@ export default function DashboardPage() {
   return (
     <>
       <PageHeader
+        leading={activeMembership && <RoleEmblem className="mt-1" />}
         eyebrow={org ? `${org.name} · ${COMPANY_TYPE_LABELS[org.companyType] ?? org.companyType}` : "Welcome to Gobi"}
         title={`${greeting()}, ${session?.user?.firstName ?? ""}`}
         description={

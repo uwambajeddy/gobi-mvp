@@ -17,7 +17,7 @@ export function Avatar({
   firstName?: string | null;
   lastName?: string | null;
   size?: keyof typeof sizes;
-  tone?: "brand" | "info" | "warning" | "neutral" | "inverse";
+  tone?: "brand" | "role" | "info" | "warning" | "neutral" | "inverse";
   className?: string;
 }) {
   return (
@@ -27,6 +27,7 @@ export function Avatar({
         "inline-flex shrink-0 select-none items-center justify-center rounded-full font-semibold",
         sizes[size],
         tone === "brand" && "bg-primary-100 text-primary-800",
+        tone === "role" && "bg-role-soft text-role-ink ring-2 ring-role-accent transition-colors duration-500",
         tone === "info" && "bg-info-soft text-info-fg ring-1 ring-inset ring-info-line",
         tone === "warning" && "bg-warning-soft text-warning-fg ring-1 ring-inset ring-warning-line",
         tone === "neutral" && "bg-surface-sunken text-ink-secondary",

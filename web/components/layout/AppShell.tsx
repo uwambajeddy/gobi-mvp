@@ -8,6 +8,8 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { Topbar } from "@/components/layout/Topbar";
+import { ShipmentStatusListener } from "@/components/layout/ShipmentStatusListener";
+import { useRoleTheme } from "@/hooks/useRoleTheme";
 
 const COLLAPSED_KEY = "gobi.sidebar.collapsed";
 
@@ -16,6 +18,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const [collapsed, setCollapsed] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const closeRef = useRef<HTMLButtonElement>(null);
+  const { key: roleTheme } = useRoleTheme();
 
   useEffect(() => {
     try {
@@ -51,7 +54,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }, [drawerOpen]);
 
   return (
-    <div className="min-h-screen lg:flex">
+    <div data-role={roleTheme} className="min-h-screen lg:flex">
       <a
         href="#main"
         className="sr-only z-50 rounded-control bg-surface px-4 py-2 text-label shadow-raised focus:not-sr-only focus:fixed focus:left-4 focus:top-4"
@@ -65,7 +68,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           collapsed ? "w-sidebar-collapsed" : "w-sidebar",
         )}
       >
-        <div className="h-full overflow-hidden rounded-panel bg-ink shadow-raised">
+        <div className="h-full overflow-hidden rounded-panel bg-role-rail shadow-raised transition-colors duration-500">
           <Sidebar collapsed={collapsed} onToggleCollapsed={toggleCollapsed} />
         </div>
       </aside>
@@ -77,7 +80,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             className="absolute inset-0 animate-fade-in bg-ink/40 backdrop-blur-[2px]"
             onClick={() => setDrawerOpen(false)}
           />
-          <div className="relative h-full w-[18rem] max-w-[85vw] animate-slide-in-left bg-ink shadow-overlay">
+          <div className="relative h-full w-[18rem] max-w-[85vw] animate-slide-in-left bg-role-rail shadow-overlay">
             <Button
               ref={closeRef}
               variant="ghost"
@@ -99,6 +102,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           {children}
         </main>
       </div>
+
+      <ShipmentStatusListener />
     </div>
   );
 }

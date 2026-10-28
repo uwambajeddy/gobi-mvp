@@ -89,6 +89,13 @@ const config: Config = {
           soft: token("info-soft"),
           line: token("info-line"),
         },
+        role: {
+          rail: token("role-rail"),
+          accent: token("role-accent"),
+          "on-accent": token("role-on-accent"),
+          soft: token("role-soft"),
+          ink: token("role-ink"),
+        },
         dark: token("ink"),
         mute: token("ink-muted"),
         "body-text": token("ink-secondary"),
@@ -109,6 +116,7 @@ const config: Config = {
         raised: "0 12px 28px -10px rgb(15 26 51 / 0.18), 0 2px 6px -2px rgb(15 26 51 / 0.07)",
         overlay: "0 24px 56px -12px rgb(16 24 40 / 0.25), 0 4px 12px -4px rgb(16 24 40 / 0.08)",
         brand: "0 6px 14px -6px rgb(199 74 46 / 0.55)",
+        role: "0 6px 16px -6px rgb(var(--role-accent) / 0.6)",
       },
       spacing: {
         "control-sm": "2.125rem",
