@@ -250,20 +250,26 @@ Current result: **52 passing**, with 78% statement and 80% line coverage. The we
 
 ## Deployment plan
 
-The MVP currently runs locally (Docker Compose for PostgreSQL, Node for the API and web app). Production deployment uses three managed services, chosen so each part deploys from this repository with no custom infrastructure:
+The demo environment runs on two managed services:
 
-| Component | Platform | Build / start | Configuration |
-|---|---|---|---|
-| PostgreSQL | Managed Postgres (Render or Neon) | n/a | SSL is already required by the `production` Sequelize config |
-| API (`api/`) | Render web service, Node 18+ | `npm ci && npm run build` / `npm start` | `NODE_ENV=production`, `DATABASE_URL`, `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`, `JWT_ACCESS_TIME`, `JWT_REFRESH_TIME`, `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET`, `BREVO_API_KEY`, `BREVO_SENDER_EMAIL`, `WEB_APP_URL` (web URL, for email links). Never set `EMAIL_REDIRECT_TO` in production. |
-| Web (`web/`) | Vercel (native Next.js hosting) | `npm run build` (automatic) | `NEXT_PUBLIC_API_URL` (API URL), `NEXTAUTH_URL` (web URL), `NEXTAUTH_SECRET`, optional `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` and `NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID` |
+| Component | Platform | URL |
+|---|---|---|
+| Web (`web/`) | Netlify (Next.js runtime) | https://gobi-mvp.netlify.app |
+| API (`api/`) + PostgreSQL | Railway, project `gobi-mvp` (services `gobi-api` and `Postgres`) | https://gobi-api-production.up.railway.app |
+
+| Component | Build / start | Configuration |
+|---|---|---|
+| PostgreSQL | Railway Postgres, private network only | The API reads `DATABASE_URL=${{Postgres.DATABASE_URL}}`; SSL is required by the `production` Sequelize config |
+| API | `npm run build` / `npm run start:prod` (runs pending migrations, then starts) | `NODE_ENV=production`, `RAILPACK_START_CMD=npm run start:prod`, `NPM_CONFIG_INCLUDE=dev` (Babel and sequelize-cli are devDependencies), `DATABASE_URL`, `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`, `JWT_ACCESS_TIME`, `JWT_REFRESH_TIME`, `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET`, `BREVO_API_KEY`, `BREVO_SENDER_EMAIL`, `BREVO_SENDER_NAME`, `WEB_APP_URL` and `EMAIL_ASSET_URL` (web URL). The demo sets `EMAIL_REDIRECT_TO` because the seeded `@gobi.rw` accounts aren't real inboxes; never set it with real users. |
+| Web | `npm run build` (`web/netlify.toml`) | `NEXT_PUBLIC_API_URL` (API URL), `NEXTAUTH_URL` (web URL), `NEXTAUTH_SECRET`, `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY`, optional `NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID` |
 
 **Release steps**
 
-1. Provision the database and copy its connection string into the API's `DATABASE_URL`.
-2. Deploy the API, then run migrations as a release step: `NODE_ENV=production npx sequelize-cli db:migrate`. Seed (`npm run seed`) only on a demo environment, never on real data.
-3. Deploy the web app with `NEXT_PUBLIC_API_URL` pointing at the API and a freshly generated `NEXTAUTH_SECRET`. For maps, use a Google Maps key restricted by HTTP referrer to the web domain and to the Maps JavaScript, Places (New) and Routes APIs, plus a production Map ID (`NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID`; the default `DEMO_MAP_ID` is for development only).
-4. Smoke test: open `/api/v1/docs`, sign in as each persona and run the demo walkthrough above.
+1. API: from `api/`, `railway up --service gobi-api --ci`. Migrations run on start; `.railwayignore` keeps local `.env` files out of the upload.
+2. Web: deploy from a copy of `web/` without `.env.local`, so local values never reach the build: `netlify deploy --build --prod --site <site id>`.
+3. Seed (`npx sequelize-cli db:seed:all`) only once, on a demo environment, never on real data. The demo database is already seeded.
+4. For maps, allow the web domain in the Google Maps key's HTTP-referrer restrictions (Maps JavaScript, Places (New) and Routes APIs), and use a production Map ID (`NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID`; the default `DEMO_MAP_ID` is for development only).
+5. Smoke test: open `/api/v1/docs`, sign in as each persona and run the demo walkthrough above.
 
 **Before real users**
 
@@ -271,6 +277,7 @@ The MVP currently runs locally (Docker Compose for PostgreSQL, Node for the API 
 - Restrict CORS on the API to the web app's origin (it is open for local development).
 - Payment proofs still record a file name only; move them to the same private Cloudinary storage as documents.
 - Generate long random JWT and NextAuth secrets per environment, and enable automated database backups.
+- Remove or re-password the seeded demo accounts: their password is published in this repository.
 
 ## License
 

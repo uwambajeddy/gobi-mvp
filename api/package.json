@@ -9,6 +9,7 @@
   "scripts": {
     "build": "babel src -d build && copyfiles -u 1 src/docs/swagger.json build/",
     "start": "node build/server.js",
+    "start:prod": "sequelize-cli db:migrate && node build/server.js",
     "dev": "nodemon --exec babel-node ./src/server.js",
     "up": "npx sequelize-cli db:migrate",
     "down": "npx sequelize-cli db:migrate:undo:all",

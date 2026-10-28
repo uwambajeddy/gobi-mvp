@@ -1,0 +1,6 @@
+# Netlify builds the Next.js app with its Next.js runtime (detected automatically).
+# Environment: NEXT_PUBLIC_API_URL, NEXTAUTH_URL, NEXTAUTH_SECRET and the
+# Google Maps keys are set on the site, not in this file.
+[build]
+  command = "npm run build"
+  publish = ".next"
