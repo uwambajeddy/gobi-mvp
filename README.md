@@ -266,7 +266,7 @@ The demo environment runs on two managed services:
 **Release steps**
 
 1. API: from `api/`, `railway up --service gobi-api --ci`. Migrations run on start; `.railwayignore` keeps local `.env` files out of the upload.
-2. Web: deploy from a copy of `web/` without `.env.local`, so local values never reach the build: `netlify deploy --build --prod --site <site id>`.
+2. Web: automatic. The Netlify site builds `web/` from `main` on every push (base directory `web`, settings in `web/netlify.toml`, which declares the Next.js runtime).
 3. Seed (`npx sequelize-cli db:seed:all`) only once, on a demo environment, never on real data. The demo database is already seeded.
 4. For maps, allow the web domain in the Google Maps key's HTTP-referrer restrictions (Maps JavaScript, Places (New) and Routes APIs), and use a production Map ID (`NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID`; the default `DEMO_MAP_ID` is for development only).
 5. Smoke test: open `/api/v1/docs`, sign in as each persona and run the demo walkthrough above.
