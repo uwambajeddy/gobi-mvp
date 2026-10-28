@@ -6,6 +6,8 @@ import { logActivity } from "../services/activityLog.service";
 import { ACTIVITY_ACTIONS } from "../utils/activityActions";
 import { recordSystemEvent } from "../services/shipmentEvents.service";
 import { notifyShipmentEvent } from "../services/notifications.service";
+import { notifyShipmentStatusChange } from "../utils/shipmentStatusNotifications";
+import { emitToShipmentParties } from "../utils/socket.io";
 import { syncDocumentPhase } from "../services/documentGate.service";
 import {
   describeAllowedActions,
@@ -341,6 +343,18 @@ export const capturePod = catchAsync(async (req, res) => {
     description: `POD captured for ${shipment.reference}, received by ${podRecipientName}`,
   });
 
+  await notifyShipmentStatusChange("delivered", shipment, {
+    actorUserId: req.user.id,
+    recipientName: podRecipientName,
+  });
+  await emitToShipmentParties(shipment, "shipmentStatusUpdate", {
+    shipmentId: shipment.id,
+    status: shipment.status,
+    eventType: "pod_captured",
+    actorUserId: req.user.id,
+    message: `${shipment.reference}: Delivered, received by ${podRecipientName}`,
+  });
+
   return successResponse(res, ok, { shipment: presentShipment(shipment, req.access) });
 });
 
@@ -367,6 +381,15 @@ export const completeShipment = catchAsync(async (req, res, next) => {
     entityType: "shipments",
     entityId: shipment.id,
     description: `Completed shipment ${shipment.reference}`,
+  });
+
+  await notifyShipmentStatusChange("completed", shipment, { actorUserId: req.user.id });
+  await emitToShipmentParties(shipment, "shipmentStatusUpdate", {
+    shipmentId: shipment.id,
+    status: shipment.status,
+    eventType: "shipment_completed",
+    actorUserId: req.user.id,
+    message: `${shipment.reference}: Completed`,
   });
 
   return successResponse(res, ok, { shipment });

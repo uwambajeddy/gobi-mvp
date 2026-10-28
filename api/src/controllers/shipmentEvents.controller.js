@@ -6,7 +6,10 @@ import { logActivity } from "../services/activityLog.service";
 import { ACTIVITY_ACTIONS } from "../utils/activityActions";
 import { checkShipmentPolicy } from "../services/shipmentAccess.service";
 import { presentEvents } from "../services/shipmentVisibility.service";
-import { EVENT_STATUS_EFFECTS } from "../config/shipmentEvents";
+import { notifyShipmentEvent } from "../services/notifications.service";
+import { notifyShipmentStatusChange } from "../utils/shipmentStatusNotifications";
+import { emitToShipmentParties } from "../utils/socket.io";
+import { DRIVER_MILESTONES, EVENT_LABELS } from "../config/shipmentEvents";
 import db from "../database/models";
 
 const { ok, created, badRequest } = statusCodes;
@@ -35,19 +38,23 @@ export const recordEvent = catchAsync(async (req, res, next) => {
   const { shipment, access } = req;
   const { eventType, occurredAt, locationName, notes, metadata } = req.body;
 
-  // Lifecycle-advancing events must come from the carrier and respect the state machine.
-  const effect = EVENT_STATUS_EFFECTS[eventType];
-  if (effect) {
+  const milestone = DRIVER_MILESTONES[eventType];
+  if (milestone) {
     const denied = checkShipmentPolicy("recordStatusMilestone", shipment, access);
     if (denied) return next(denied);
-  }
-  if (effect && !effect.from.includes(shipment.status)) {
-    return next(
-      new AppError(
-        `"${eventType}" cannot be recorded while the shipment is ${shipment.status}.`,
-        badRequest,
-      ),
-    );
+
+    if (!milestone.from.includes(shipment.status)) {
+      return next(
+        new AppError(
+          `"${eventType}" cannot be recorded while the shipment is ${shipment.status}.`,
+          badRequest,
+        ),
+      );
+    }
+    const alreadyRecorded = await shipment_events.count({ where: { shipmentId: shipment.id, eventType } });
+    if (alreadyRecorded) {
+      return next(new AppError(`"${EVENT_LABELS[eventType]}" has already been recorded.`, badRequest));
+    }
   }
 
   const event = await shipment_events.create({
@@ -61,8 +68,11 @@ export const recordEvent = catchAsync(async (req, res, next) => {
     source: "manual",
   });
 
-  if (effect) {
-    await shipment.update({ status: effect.to });
+  if (milestone?.to) {
+    await shipment.update({ status: milestone.to });
+  }
+  if (eventType === "en_route_to_pickup") {
+    await shipment.update({ startTime: event.occurredAt });
   }
 
   await logActivity({
@@ -73,6 +83,19 @@ export const recordEvent = catchAsync(async (req, res, next) => {
     description: `Recorded "${eventType}" on ${shipment.reference}${locationName ? ` at ${locationName}` : ""}`,
     metadata: { eventType, shipmentId: shipment.id, statusAfter: shipment.status },
   });
+
+  if (milestone) {
+    await notifyShipmentStatusChange(eventType, shipment, { actorUserId: req.user.id });
+    notifyShipmentEvent(eventType, { shipmentId: shipment.id, actorUserId: req.user.id });
+
+    await emitToShipmentParties(shipment, "shipmentStatusUpdate", {
+      shipmentId: shipment.id,
+      status: shipment.status,
+      eventType,
+      actorUserId: req.user.id,
+      message: `${shipment.reference}: ${EVENT_LABELS[eventType]}`,
+    });
+  }
 
   const withActor = await shipment_events.findByPk(event.id, { include: actorInclude });
   return successResponse(res, created, { event: withActor, shipmentStatus: shipment.status });

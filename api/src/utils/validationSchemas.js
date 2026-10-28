@@ -147,6 +147,11 @@ export const recordEventSchema = Joi.object({
   metadata: Joi.object(),
 });
 
+export const updateLocationSchema = Joi.object({
+  latitude: Joi.number().min(-90).max(90).required(),
+  longitude: Joi.number().min(-180).max(180).required(),
+});
+
 export const capturePodSchema = Joi.object({
   podRecipientName: Joi.string().trim().min(2).max(120).required(),
   podNotes: Joi.string().trim().max(2000).allow(""),

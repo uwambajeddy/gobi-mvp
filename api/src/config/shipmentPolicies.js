@@ -12,6 +12,12 @@ const FINANCIAL_VIEWERS = ["isAdmin", "isShipper", "isCarrier", "isAgent"];
 
 const OPERATIONAL_STATUSES = ["execution_assigned", "in_transit", "arrived", "delivered"];
 
+const TRACKING_STATUSES = ["execution_assigned", "in_transit"];
+
+const isTrackingActive = (shipment) =>
+  TRACKING_STATUSES.includes(shipment.status) &&
+  (shipment.status !== "execution_assigned" || Boolean(shipment.startTime));
+
 const DOCUMENT_UPLOAD_STATUSES = [
   "quote_approved",
   "awaiting_documents",
@@ -114,10 +120,18 @@ const SHIPMENT_POLICIES = {
     denied: "Only shipment parties can record events.",
     wrongStage: "Operational events can only be recorded once a vehicle and driver are assigned.",
   },
-  // Events that move the status (EVENT_STATUS_EFFECTS); checked on top of recordEvent.
   recordStatusMilestone: {
     actors: ["isCarrierCoordinator", "isAssignedDriver"],
-    denied: "Only the carrier's coordinators or the assigned driver can record pickup and arrival.",
+    denied: "Only the carrier's coordinators or the assigned driver can record the driver's progress.",
+  },
+
+  viewTracking: { actors: PARTY, denied: NOT_A_PARTY },
+  updateLocation: {
+    actors: ["isAssignedDriver"],
+    stages: TRACKING_STATUSES,
+    when: isTrackingActive,
+    denied: "Only the assigned driver can share the vehicle's location.",
+    wrongStage: 'Location is shared from "Going to pickup" until arrival at the destination.',
   },
 
   capturePod: {
@@ -167,4 +181,6 @@ module.exports = {
   SHIPMENT_POLICIES,
   OPERATIONAL_STATUSES,
   DOCUMENT_UPLOAD_STATUSES,
+  TRACKING_STATUSES,
+  isTrackingActive,
 };
