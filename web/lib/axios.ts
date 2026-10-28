@@ -2,7 +2,7 @@ import axios from "axios";
 
 export const ACTIVE_ORG_COOKIE = "gobi_active_org";
 
-const readActiveOrgId = (): string | null => {
+export const readActiveOrgId = (): string | null => {
   if (typeof document === "undefined") return null;
   const match = document.cookie
     .split("; ")

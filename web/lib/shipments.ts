@@ -30,6 +30,22 @@ export const CANCELLABLE_STATUSES: ShipmentStatus[] = [
   "execution_assigned",
 ];
 
+/**
+ * Live tracking runs from "Going to pickup" until arrival: in transit, and
+ * before pickup once the driver has set off (mirrors the API's isTrackingActive).
+ */
+export const TRACKING_STATUSES: ShipmentStatus[] = ["execution_assigned", "in_transit"];
+
+export const isTrackingActive = (shipment: Pick<Shipment, "status" | "startTime">) =>
+  TRACKING_STATUSES.includes(shipment.status) &&
+  (shipment.status !== "execution_assigned" || Boolean(shipment.startTime));
+
+/**
+ * The driver's progress milestones, in order: one button each (mirrors the
+ * API's DRIVER_MILESTONES). Proof of delivery is the last step.
+ */
+export const DRIVER_MILESTONES = ["en_route_to_pickup", "arrived_pickup", "picked_up", "arrived_destination"];
+
 /** Filterable statuses, in lifecycle order (quote_approved is transient). */
 export const FILTER_STATUSES: ShipmentStatus[] = [
   "draft",
@@ -84,7 +100,9 @@ export function nextStepHint(shipment: Shipment): string {
     case "documents_complete":
       return "Documents complete. Ready for vehicle and driver assignment.";
     case "execution_assigned":
-      return "Vehicle and driver assigned. Waiting for pickup.";
+      return shipment.startTime
+        ? "The driver is on the way to pickup."
+        : "Vehicle and driver assigned. Waiting for the driver to set off.";
     case "in_transit":
       return "On the road. Milestones are recorded on the timeline.";
     case "arrived":

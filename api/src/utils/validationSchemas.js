@@ -165,6 +165,13 @@ export const recordEventSchema = Joi.object({
   metadata: Joi.object(),
 });
 
+// ── Live tracking ─────────────────────────────────────────────────────────────
+
+export const updateLocationSchema = Joi.object({
+  latitude: Joi.number().min(-90).max(90).required(),
+  longitude: Joi.number().min(-180).max(180).required(),
+});
+
 // ── POD & completion ──────────────────────────────────────────────────────────
 
 export const capturePodSchema = Joi.object({

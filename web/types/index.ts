@@ -136,6 +136,11 @@ export interface Shipment {
   podRecipientName?: string | null;
   podNotes?: string | null;
   podCapturedAt?: string | null;
+  /** Set when the driver taps "Going to pickup"; live tracking runs from then until arrival. */
+  startTime?: string | null;
+  /** Live tracking: the assigned driver's latest position while tracking is active. */
+  currentLocation?: { lat: number; lng: number } | null;
+  lastLocationUpdate?: string | null;
   distributionOrg?: Organization;
   transportOrg?: Organization | null;
   clearingAgentOrg?: Organization | null;
@@ -225,6 +230,28 @@ export interface ShipmentAccess {
   isParty: boolean;
   /** Per-action verdicts from the API's shipment policies (keys of SHIPMENT_POLICIES). */
   can?: Record<string, boolean>;
+}
+
+/** In-app notification (GET /api/v1/notifications, pushed live as `newNotification`). */
+export interface AppNotification {
+  id: number;
+  title: string;
+  content?: string | null;
+  isRead: boolean;
+  actionUrl?: string | null;
+  /** Where the notification opens in the app, e.g. "shipment" + its id. */
+  entityType?: string | null;
+  entityId?: number | null;
+  createdAt: string;
+}
+
+/** Payload of the `shipmentStatusUpdate` socket event. */
+export interface ShipmentStatusUpdate {
+  shipmentId: number;
+  status: ShipmentStatus;
+  eventType: string;
+  actorUserId: number;
+  message: string;
 }
 
 export interface DocumentGateResult {

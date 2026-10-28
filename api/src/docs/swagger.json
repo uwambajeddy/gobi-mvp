@@ -14,6 +14,8 @@
     { "name": "Documents", "description": "Required-documents checklist and verification" },
     { "name": "Assignment", "description": "Vehicle & driver assignment with gates" },
     { "name": "Events", "description": "Structured operational timeline" },
+    { "name": "Tracking", "description": "Live driver location (REST + Socket.IO)" },
+    { "name": "Notifications", "description": "In-app notifications (also pushed live as the `newNotification` Socket.IO event)" },
     { "name": "Payments", "description": "Operational payments ledger" },
     { "name": "Exceptions", "description": "Incident management" },
     { "name": "Fleet", "description": "Transport organization vehicles" },
@@ -639,7 +641,7 @@
       },
       "post": {
         "tags": ["Events"],
-        "summary": "Record a manual milestone (who/when/where/evidence). picked_up and arrived_destination advance the lifecycle and are limited to carrier owners/coordinators and the assigned driver.",
+        "summary": "Record a manual milestone (who/when/where/evidence). The driver's progress steps (en_route_to_pickup, arrived_pickup, picked_up, arrived_destination) are limited to carrier owners/coordinators and the assigned driver, are recorded once each, notify every party and emit `shipmentStatusUpdate`; picked_up and arrived_destination also advance the lifecycle, and en_route_to_pickup starts live tracking.",
         "parameters": [{ "$ref": "#/components/parameters/shipmentId" }],
         "requestBody": {
           "required": true,
@@ -659,7 +661,53 @@
             }
           }
         },
-        "responses": { "201": { "description": "Event recorded" }, "400": { "description": "Outside the operational window or invalid transition" } }
+        "responses": { "201": { "description": "Event recorded" }, "400": { "description": "Outside the operational window, invalid transition, or a driver step already recorded" } }
+      }
+    },
+    "/api/v1/shipments/{id}/tracking": {
+      "get": {
+        "tags": ["Tracking"],
+        "summary": "Driver's latest position and recent trail (any party). Polled as a fallback to the live `newCoordinates` Socket.IO event.",
+        "parameters": [{ "$ref": "#/components/parameters/shipmentId" }],
+        "responses": { "200": { "description": "Tracking: currentLocation { lat, lng }, lastLocationUpdate, trackingHistory (last 100 points)" } }
+      }
+    },
+    "/api/v1/shipments/{id}/location": {
+      "patch": {
+        "tags": ["Tracking"],
+        "summary": "Save the vehicle's current position (assigned driver only, from \"Going to pickup\" until arrival at the destination). The driver's browser also emits it live as the `newCoordinates` Socket.IO event.",
+        "parameters": [{ "$ref": "#/components/parameters/shipmentId" }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "type": "object", "required": ["latitude", "longitude"], "properties": { "latitude": { "type": "number", "example": -1.9441 }, "longitude": { "type": "number", "example": 30.0619 } } }
+            }
+          }
+        },
+        "responses": { "200": { "description": "Location updated" }, "400": { "description": "Driver hasn't set off yet, or the shipment has arrived" }, "403": { "description": "Not the assigned driver" } }
+      }
+    },
+    "/api/v1/notifications": {
+      "get": {
+        "tags": ["Notifications"],
+        "summary": "The signed-in user's latest 20 notifications (newest first) and their unread count",
+        "responses": { "200": { "description": "results [{ id, title, content, isRead, entityType, entityId, createdAt }], unreadCount" } }
+      }
+    },
+    "/api/v1/notifications/read": {
+      "patch": {
+        "tags": ["Notifications"],
+        "summary": "Mark all of the signed-in user's notifications as read",
+        "responses": { "200": { "description": "Notifications marked as read" } }
+      }
+    },
+    "/api/v1/notifications/read/{id}": {
+      "patch": {
+        "tags": ["Notifications"],
+        "summary": "Mark one of the signed-in user's notifications as read",
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "responses": { "200": { "description": "Notification marked as read" } }
       }
     },
     "/api/v1/shipments/{id}/pod": {

@@ -77,7 +77,10 @@ export const checkShipmentPolicy = (action, shipment, access) => {
   if (!policy.actors.some((flag) => access[flag])) {
     return new AppError(policy.denied, forbidden);
   }
-  if (policy.stages && !policy.stages.includes(shipment.status)) {
+  if (
+    (policy.stages && !policy.stages.includes(shipment.status)) ||
+    (policy.when && !policy.when(shipment))
+  ) {
     const message =
       typeof policy.wrongStage === "function" ? policy.wrongStage(shipment.status) : policy.wrongStage;
     return new AppError(message, badRequest);
