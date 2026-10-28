@@ -4,3 +4,8 @@
 [build]
   command = "npm run build"
   publish = ".next"
+
+# Declared explicitly: Git builds only add the Next.js runtime on their own for
+# sites created in the Netlify UI, and without it the site serves nothing but 404s.
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
