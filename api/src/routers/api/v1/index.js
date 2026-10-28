@@ -7,6 +7,7 @@ import shipmentsRouter from "./shipments";
 import vehiclesRouter from "./vehicles";
 import driverRouter from "./driver";
 import adminRouter from "./admin";
+import notificationsRouter from "./notifications";
 
 const v1Router = express.Router();
 
@@ -18,5 +19,6 @@ v1Router.use("/shipments", shipmentsRouter);
 v1Router.use("/vehicles", vehiclesRouter);
 v1Router.use("/driver", driverRouter);
 v1Router.use("/admin", adminRouter);
+v1Router.use("/notifications", notificationsRouter);
 
 export default v1Router;

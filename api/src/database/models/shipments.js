@@ -80,6 +80,12 @@ module.exports = (sequelize, DataTypes) => {
       podRecipientName: DataTypes.STRING,
       podNotes: DataTypes.TEXT,
       podCapturedAt: DataTypes.DATE,
+      // Set when the driver taps "Going to pickup" (config/shipmentEvents DRIVER_MILESTONES)
+      startTime: DataTypes.DATE,
+      // Live tracking, written by the assigned driver's browser (see utils/socket.io.js)
+      currentLocation: DataTypes.JSONB,
+      lastLocationUpdate: DataTypes.DATE,
+      trackings: DataTypes.ARRAY(DataTypes.JSONB),
     },
     {
       sequelize,

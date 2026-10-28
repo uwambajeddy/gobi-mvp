@@ -34,6 +34,7 @@ const SYSTEM_EVENT_TYPES = [
 /** Milestones recordable by hand from the operations workspace. */
 const MANUAL_EVENT_TYPES = [
   "en_route_to_pickup",
+  "arrived_pickup",
   "picked_up",
   "departed_origin",
   "checkpoint",
@@ -52,10 +53,18 @@ const MANUAL_EVENT_TYPES = [
 const EVENT_TYPES = [...SYSTEM_EVENT_TYPES, ...MANUAL_EVENT_TYPES];
 
 /**
- * Events that advance the shipment lifecycle when recorded.
+ * The driver's progress milestones, in order: one button each on the driver's
+ * screen. Same flow as the commercial driver app (Start delivery, Mark picked
+ * up, Mark arrived, then Submit POD), with an "arrived at pickup" check-in.
+ * Proof of delivery (POST /:id/pod) is the last step.
+ *
+ * `from` lists the statuses the milestone may be recorded in; `to`, when set,
+ * is the status it moves the shipment to. Each is recorded once per shipment.
  * Everything else is pure timeline data.
  */
-const EVENT_STATUS_EFFECTS = {
+const DRIVER_MILESTONES = {
+  en_route_to_pickup: { from: ["execution_assigned"] },
+  arrived_pickup: { from: ["execution_assigned"] },
   picked_up: { from: ["execution_assigned"], to: "in_transit" },
   arrived_destination: { from: ["in_transit"], to: "arrived" },
 };
@@ -79,6 +88,7 @@ const EVENT_LABELS = {
   shipment_completed: "Shipment completed",
   shipment_cancelled: "Shipment cancelled",
   en_route_to_pickup: "En route to pickup",
+  arrived_pickup: "Arrived at pickup",
   picked_up: "Cargo picked up",
   departed_origin: "Departed origin",
   checkpoint: "Checkpoint passed",
@@ -98,6 +108,6 @@ module.exports = {
   SYSTEM_EVENT_TYPES,
   MANUAL_EVENT_TYPES,
   EVENT_TYPES,
-  EVENT_STATUS_EFFECTS,
+  DRIVER_MILESTONES,
   EVENT_LABELS,
 };

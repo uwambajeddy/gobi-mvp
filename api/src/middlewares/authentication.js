@@ -7,6 +7,23 @@ import db from "../database/models";
 const { unAuthorized, forbidden } = statusCodes;
 const { users, organization_members, organizations } = db;
 
+/** Active org memberships, loaded with the user by `protect` and `protectSocket`. */
+const membershipIncludes = [
+  {
+    model: organization_members,
+    as: "memberships",
+    where: { active: true },
+    required: false,
+    include: [
+      {
+        model: organizations,
+        as: "organization",
+        attributes: ["id", "name", "companyType"],
+      },
+    ],
+  },
+];
+
 /**
  * Resolves the caller's active organization membership.
  *
@@ -58,21 +75,7 @@ export const protect = catchAsync(async (req, res, next) => {
 
   const currentUser = await users.findOne({
     where: { id: decoded.sub, isActive: true },
-    include: [
-      {
-        model: organization_members,
-        as: "memberships",
-        where: { active: true },
-        required: false,
-        include: [
-          {
-            model: organizations,
-            as: "organization",
-            attributes: ["id", "name", "companyType"],
-          },
-        ],
-      },
-    ],
+    include: membershipIncludes,
   });
 
   if (!currentUser) {
@@ -83,6 +86,46 @@ export const protect = catchAsync(async (req, res, next) => {
   applyActiveOrganization(req);
   next();
 });
+
+/**
+ * Socket.IO authentication guard, used with `io.use` (see server.js).
+ * Same checks as `protect`, with the access token read from the handshake
+ * (`auth.token`, or `?token=`). The user is kept on `socket.userInfo`.
+ */
+export const protectSocket = async (socket, next) => {
+  try {
+    const accessToken = socket.handshake.auth?.token || socket.handshake.query?.token;
+
+    if (!accessToken) {
+      return next(new AppError("You are not logged in. Please log in to get access.", unAuthorized));
+    }
+
+    const { decoded, expired } = await verifyJwt(accessToken, "access");
+
+    if (!decoded) {
+      return next(
+        new AppError(
+          expired ? "Your session has expired. Please log in again." : "Invalid access token.",
+          unAuthorized,
+        ),
+      );
+    }
+
+    const currentUser = await users.findOne({
+      where: { id: decoded.sub, isActive: true },
+      include: membershipIncludes,
+    });
+
+    if (!currentUser) {
+      return next(new AppError("The user belonging to this token no longer exists.", unAuthorized));
+    }
+
+    socket.userInfo = currentUser;
+    next();
+  } catch (error) {
+    next(error);
+  }
+};
 
 /**
  * Platform-level type guard (e.g. restrictToType("admin")). Use after `protect`.

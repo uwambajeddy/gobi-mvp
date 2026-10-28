@@ -26,6 +26,10 @@ import {
 } from "../../../controllers/shipmentAssignment.controller";
 import { listEvents, recordEvent } from "../../../controllers/shipmentEvents.controller";
 import {
+  getShipmentTracking,
+  updateShipmentLocation,
+} from "../../../controllers/shipmentTracking.controller";
+import {
   listPayments,
   recordPayment,
   markPaymentPaid,
@@ -57,6 +61,7 @@ import {
   rejectDocumentSchema,
   assignExecutionSchema,
   recordEventSchema,
+  updateLocationSchema,
   capturePodSchema,
   recordPaymentSchema,
   openExceptionSchema,
@@ -156,6 +161,15 @@ router.post(
 // Timeline
 router.get("/:id/events", authorizeShipment("listEvents"), listEvents);
 router.post("/:id/events", validate(recordEventSchema), authorizeShipment("recordEvent"), recordEvent);
+
+// Live tracking (live updates travel over the `newCoordinates` socket event)
+router.get("/:id/tracking", authorizeShipment("viewTracking"), getShipmentTracking);
+router.patch(
+  "/:id/location",
+  validate(updateLocationSchema),
+  authorizeShipment("updateLocation"),
+  updateShipmentLocation,
+);
 
 // POD & completion
 router.post(

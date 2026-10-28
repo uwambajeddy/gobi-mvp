@@ -5,6 +5,7 @@
  * `actors` names the access flags computed by `getShipmentAccess`
  * (services/shipmentAccess.service.js); any one of them is enough.
  * `stages` lists the statuses the action may run in; omitted means any.
+ * `when`, if set, is a further check on the shipment, refused like a wrong stage.
  * `denied` / `wrongStage` are the messages returned with 403 / 400.
  *
  * Enforced by the `authorizeShipment` middleware on every shipment route,
@@ -32,6 +33,17 @@ const FINANCIAL_VIEWERS = ["isAdmin", "isShipper", "isCarrier", "isAgent"];
 
 /** Window in which manual operational milestones may be recorded. */
 const OPERATIONAL_STATUSES = ["execution_assigned", "in_transit", "arrived", "delivered"];
+
+/**
+ * Live driver tracking runs from "Going to pickup" until arrival
+ * (arrived_destination): before pickup only once the driver has set off,
+ * which stamps `startTime` (see isTrackingActive).
+ */
+const TRACKING_STATUSES = ["execution_assigned", "in_transit"];
+
+const isTrackingActive = (shipment) =>
+  TRACKING_STATUSES.includes(shipment.status) &&
+  (shipment.status !== "execution_assigned" || Boolean(shipment.startTime));
 
 /** Statuses in which documents may be uploaded: after quote approval, before closure. */
 const DOCUMENT_UPLOAD_STATUSES = [
@@ -142,10 +154,21 @@ const SHIPMENT_POLICIES = {
     denied: "Only shipment parties can record events.",
     wrongStage: "Operational events can only be recorded once a vehicle and driver are assigned.",
   },
-  // Events that move the status (EVENT_STATUS_EFFECTS); checked on top of recordEvent.
+  // The driver's progress milestones (DRIVER_MILESTONES); checked on top of recordEvent.
   recordStatusMilestone: {
     actors: ["isCarrierCoordinator", "isAssignedDriver"],
-    denied: "Only the carrier's coordinators or the assigned driver can record pickup and arrival.",
+    denied: "Only the carrier's coordinators or the assigned driver can record the driver's progress.",
+  },
+
+  // ── Live tracking ──────────────────────────────────────────────────────────
+  viewTracking: { actors: PARTY, denied: NOT_A_PARTY },
+  // Checked on the REST endpoint and on the `newCoordinates` socket event.
+  updateLocation: {
+    actors: ["isAssignedDriver"],
+    stages: TRACKING_STATUSES,
+    when: isTrackingActive,
+    denied: "Only the assigned driver can share the vehicle's location.",
+    wrongStage: 'Location is shared from "Going to pickup" until arrival at the destination.',
   },
 
   // ── POD & completion ───────────────────────────────────────────────────────
@@ -200,4 +223,6 @@ module.exports = {
   SHIPMENT_POLICIES,
   OPERATIONAL_STATUSES,
   DOCUMENT_UPLOAD_STATUSES,
+  TRACKING_STATUSES,
+  isTrackingActive,
 };
