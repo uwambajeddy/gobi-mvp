@@ -161,9 +161,39 @@ Seeded shipments: `GB-2026-0001` completed (full history) · `GB-2026-0002` cros
 
 **Document files (Cloudinary).** Uploads accept PDF, JPG or PNG up to 10 MB; the type is checked from the file's content, not its name. Files are stored as private Cloudinary assets. To view one, the web app asks `GET /shipments/documents/:docId/file`, which checks that the caller is a party to the shipment and returns a download link that expires after 5 minutes. Seeded documents carry a file name only and show "no file stored".
 
-**Email (Brevo).** The API emails whoever has to act next: carrier and clearing-agent assignment, quote received, quote approved, document rejected (to the uploader), documents complete, vehicle and driver assigned (to the driver and the shipper), exception opened, proof of delivery, completion and cancellation, plus a welcome email, "added to an organization" and driver-licence review results. Emails are sent in the background, never block the action, and never go to the person who acted.
+**Email (Brevo).** The API emails whoever has to act next: carrier and clearing-agent assignment, quote received, quote approved, document rejected (to the uploader), documents complete, vehicle and driver assigned (to the driver and the shipper), cargo picked up and arrived at destination (to the shipper), exception opened, proof of delivery, completion and cancellation, plus a welcome email, "added to an organization" and driver-licence review results. Emails are sent in the background, never block the action, and never go to the person who acted.
 
 The seeded `@gobi.rw` addresses cannot receive mail, so for development and demos set `EMAIL_REDIRECT_TO` to one inbox: every email goes there, with the intended recipient shown in the subject. Tests never send email or touch Cloudinary.
+
+## Live driver tracking (Socket.IO)
+
+From the moment the driver taps **Going to pickup** until they tap **Arrived at destination**, the assigned driver's browser shares its GPS position and every party sees the truck move on the shipment map and on the dashboard's ongoing-shipments map. Same design as the commercial platform:
+
+1. **Driver** (`hooks/useDriverBackgroundTracker.ts`, mounted in the dashboard shell): `navigator.geolocation.watchPosition`, throttled to one fix per 10 s and 20 m of movement (or every 2 min when parked). Each fix goes out twice: the `newCoordinates` socket event (live, best-effort) and `PATCH /api/v1/shipments/:id/location` (saved, with the last 100 points kept in `trackings`). A chip in the top bar shows whether the location is being shared (amber or red when paused or blocked) and lets the driver pause it; the driver's trip card says the same, with the fix, when the shipper can't see the truck.
+2. **API** (`utils/socket.io.js`): sockets authenticate with the access token (`protectSocket`). On `newCoordinates` the API checks the `updateLocation` policy (assigned driver, trip started and not yet arrived), saves `currentLocation`, and emits `newCoordinates` to the staff of the shipper, carrier and clearing agent plus the driver.
+3. **Viewers** (`hooks/useShipmentLiveLocation.ts`): the shipment map listens for `newCoordinates`, and polls `GET /api/v1/shipments/:id/tracking` as a safety net (every 30 s, or 8 s while the socket is down). The status line shows *Live* or *Polling* and flags a position older than 2.5 minutes as possibly outdated.
+
+To demo it, sign in as `driver@gobi.rw` in one browser and `shipper@gobi.rw` in another, and open a shipment with the driver assigned (walkthrough step 4) to start from *Going to pickup*, or `GB-2026-0002` (seeded in transit). Allow location for the driver, then move the truck with Chrome DevTools → **Sensors** → *Location*. Browsers only share GPS with `localhost` or HTTPS pages, so a phone needs the web app served over HTTPS.
+
+## Driver progress and notifications
+
+The driver updates the shipment with one button per step on the **Your trip** card (`components/shipments/DriverProgress.tsx`); the other parties see the same steps read-only as **Driver progress**. Same flow as the commercial driver app (*Start delivery → Mark picked up → Submit POD*):
+
+| Button | Records | Status | Also |
+|---|---|---|---|
+| Start trip to pickup | `en_route_to_pickup` | stays *execution assigned* | stamps `startTime`; live tracking starts |
+| Arrived at pickup | `arrived_pickup` | stays *execution assigned* | |
+| Cargo loaded, start transit | `picked_up` | → *in transit* | email to the shipper |
+| Arrived at destination | `arrived_destination` | → *arrived* | live tracking stops; email to the shipper |
+| Confirm delivery | proof of delivery (`POST /pod`) | → *delivered* | the shipper then confirms receipt → *completed* |
+
+The four steps go through `POST /shipments/:id/events` and are defined once in `config/shipmentEvents.js` (`DRIVER_MILESTONES`): only the assigned driver or the carrier's coordinators may record them, in the right status, and each only once, so a double tap is refused.
+
+Every step, plus vehicle-and-driver assignment and completion, notifies the parties the way the commercial platform's `notifyDeliveryStatusChange` does (`utils/shipmentStatusNotifications.js`):
+
+1. **In-app notification** for the shipper's, carrier's and clearing agent's staff and the driver, never the person who acted. `createNotification` (`utils/notification.js`) stores it in `notifications` and pushes it live as the `newNotification` socket event; the bell in the top bar lists the latest 20 (`GET /notifications`).
+2. **`shipmentStatusUpdate` socket event** to every party (the commercial `deliveryStatusUpdate`): open screens show a toast and refresh the shipment, its timeline, lists and maps (`components/layout/ShipmentStatusListener.tsx`).
+3. **Email** where a rule exists in `services/notifications.service.js`.
 
 ## Demo walkthrough
 
@@ -171,8 +201,8 @@ The seeded `@gobi.rw` addresses cannot receive mail, so for development and demo
 2. **Coordinator** (`coordinator@gobi.rw`): submit a quote. **Shipper**: approve it and the document checklist appears.
 3. Upload the mandatory documents as PDF or image files (any party); the **coordinator** opens each one with **View** and verifies it from the viewer. Watch the Document Gate flip to green and the status advance to *Documents complete*. Reject one to see it regress (the uploader gets an email with the reason).
 4. **Coordinator** → Assignment tab: pick the expired-insurance truck + expired-licence driver and the Compliance Gate **blocks** with exact failures. Either fix the pairing (RAE 001 T + driver@) or override with a written reason (audited).
-5. Record the corridor journey on the Timeline: *picked up* (status → in transit), *border approached*, *border cleared* ("Truck crossed Rusumo at 15:42"), *customs released*, *arrived at destination*.
-6. Capture **POD** → shipper confirms receipt → *completed*. Try completing with an open exception first to see the closure rule.
+5. **Driver** (`driver@gobi.rw`): open the assignment and tap through **Your trip**: *Start trip to pickup* (the shipper's map starts showing the truck live), *Arrived at pickup*, *Cargo loaded, start transit* (status → in transit). Each tap pops a toast and a bell notification for the shipper and carrier. Log the corridor on the Timeline as it happens: *border approached*, *border cleared* ("Truck crossed Rusumo at 15:42"), *customs released*. Then tap *Arrived at destination*.
+6. **Driver**: *Confirm delivery* with the receiver's name → shipper confirms receipt → *completed*. Try completing with an open exception first to see the closure rule.
 7. **Admin** (`admin@gobi.rw`): review the audit log. Every action above is there with actor, role, organization and the gate-override evidence.
 
 ## API overview
@@ -187,7 +217,9 @@ Base URL: `http://localhost:8080/api/v1`. Full spec at `/api/v1/docs`.
 | Award | `POST /shipments/:id/assign-carrier\|assign-clearing-agent\|quote\|approve-quote` |
 | Documents | `GET/POST /shipments/:id/documents` (multipart upload), `GET /shipments/documents/:docId/file` (signed view link), `PATCH /shipments/documents/:docId/verify\|reject` |
 | Assignment | `GET /shipments/:id/assignment-preview`, `POST /shipments/:id/assign` (gates + audited override) |
-| Timeline | `GET/POST /shipments/:id/events` |
+| Timeline | `GET/POST /shipments/:id/events` (including the driver's progress steps) |
+| Live tracking | `GET /shipments/:id/tracking`, `PATCH /shipments/:id/location` (assigned driver, from going to pickup until arrival), Socket.IO event `newCoordinates` |
+| Notifications | `GET /notifications`, `PATCH /notifications/read`, `PATCH /notifications/read/:id`, Socket.IO events `newNotification` and `shipmentStatusUpdate` |
 | POD & closure | `POST /shipments/:id/pod`, `POST /shipments/:id/complete` |
 | Payments | `GET/POST /shipments/:id/payments`, `PATCH /shipments/payments/:id/mark-paid` |
 | Exceptions | `GET/POST /shipments/:id/exceptions`, `PATCH /shipments/exceptions/:id/resolve` |
@@ -199,9 +231,9 @@ Multi-org users select their acting organization with the `x-organization-id` he
 
 ## Tech stack
 
-**Backend:** Express 4, Sequelize 6 (PostgreSQL), JWT auth with organization-scoped RBAC, Joi validation, service-layer gates (document / compliance), immutable `activity_logs`, Cloudinary (private document storage, multer uploads), Brevo (transactional email), Swagger UI, Babel, Mocha + Chai + chai-http + nyc.
+**Backend:** Express 4, Sequelize 6 (PostgreSQL), JWT auth with organization-scoped RBAC, Joi validation, service-layer gates (document / compliance), immutable `activity_logs`, Cloudinary (private document storage, multer uploads), Brevo (transactional email), Socket.IO (live driver tracking), Swagger UI, Babel, Mocha + Chai + chai-http + nyc.
 
-**Frontend:** Next.js 14 App Router, TypeScript, Tailwind CSS, NextAuth (credentials), TanStack React Query, React Hook Form + Zod, Axios with org-context header, Lucide icons.
+**Frontend:** Next.js 14 App Router, TypeScript, Tailwind CSS, NextAuth (credentials), TanStack React Query, React Hook Form + Zod, Axios with org-context header, socket.io-client, Lucide icons.
 
 **Tooling:** Docker Compose (PostgreSQL 16 with separate dev and test databases), sequelize-cli migrations and seeders, nodemon, ESLint (`next lint`), Git + GitHub with feature branches merged into `main`.
 
