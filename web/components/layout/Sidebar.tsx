@@ -91,7 +91,15 @@ export function Sidebar({
               <span className="sr-only">Acting as {activeMembership?.organization?.name}</span>
             </span>
           ) : (
-            <div className="relative rounded-inset border border-role-accent/25 bg-role-accent/[0.09] py-2.5 pl-3.5 pr-3 shadow-[inset_3px_0_0_rgb(var(--role-accent))] transition-colors duration-500">
+            <div className="relative isolate overflow-hidden rounded-inset border border-white/[0.12] bg-gradient-to-br from-white/[0.1] to-white/[0.03] px-3.5 py-2.5 shadow-[inset_0_1px_0_rgb(255_255_255/0.14),0_8px_24px_-12px_rgb(0_0_0/0.5)] backdrop-blur-md transition-colors duration-500">
+              <div
+                aria-hidden
+                className="pointer-events-none absolute -right-6 -top-8 -z-10 h-20 w-20 rounded-full bg-role-accent/30 blur-2xl transition-colors duration-500"
+              />
+              <div
+                aria-hidden
+                className="pointer-events-none absolute inset-x-3 top-0 h-px bg-gradient-to-r from-transparent via-white/40 to-transparent"
+              />
               <RoleEmblem size="sm" className="absolute right-2.5 top-2.5" />
               <p className="text-overline text-white/55">Acting as</p>
               {isLoading ? (
