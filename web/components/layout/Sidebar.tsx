@@ -100,13 +100,20 @@ export function Sidebar({
               <span className="sr-only">Acting as {activeMembership?.organization?.name}</span>
             </span>
           ) : (
-            <div className="relative isolate overflow-hidden rounded-inset border border-white/[0.12] bg-gradient-to-br from-white/[0.1] to-white/[0.03] px-3.5 py-2.5 shadow-[inset_0_1px_0_rgb(255_255_255/0.14),0_8px_24px_-12px_rgb(0_0_0/0.5)] backdrop-blur-md transition-colors duration-500">
+            <div
+              className={cn(
+                "relative isolate overflow-hidden rounded-inset border border-white/[0.12] px-3.5 py-2.5 shadow-[inset_0_1px_0_rgb(255_255_255/0.14),0_8px_24px_-12px_rgb(0_0_0/0.5)] backdrop-blur-md transition-colors duration-500",
+                cardImage
+                  ? "pl-[34%] text-right [text-shadow:0_1px_2px_rgb(0_0_0/0.6)]"
+                  : "bg-gradient-to-br from-white/[0.1] to-white/[0.03]",
+              )}
+            >
               {cardImage && (
                 <>
-                  <Image src={cardImage} alt="" fill sizes="256px" className="-z-20 object-cover" />
+                  <Image src={cardImage} alt="" fill sizes="256px" className="-z-20 object-cover object-left" />
                   <div
                     aria-hidden
-                    className="pointer-events-none absolute inset-0 -z-10 bg-gradient-to-r from-ink/90 via-ink/70 to-ink/30"
+                    className="pointer-events-none absolute inset-0 -z-10 bg-gradient-to-l from-ink/90 via-ink/55 via-45% to-transparent to-75%"
                   />
                 </>
               )}
@@ -116,13 +123,18 @@ export function Sidebar({
               />
               <p className="text-overline text-white/70">Acting as</p>
               {isLoading ? (
-                <div className="mt-1.5 space-y-1.5">
+                <div className={cn("mt-1.5 space-y-1.5", cardImage && "flex flex-col items-end")}>
                   <Skeleton className="h-4 w-32 bg-white/10" />
                   <Skeleton className="h-3 w-24 bg-white/10" />
                 </div>
               ) : memberships.length === 1 ? (
                 <>
-                  <p className="mt-0.5 truncate text-label font-semibold text-white">
+                  <p
+                    className={cn(
+                      "mt-0.5 text-label font-semibold text-white",
+                      cardImage ? "line-clamp-2 leading-tight" : "truncate",
+                    )}
+                  >
                     {activeMembership?.organization?.name}
                   </p>
                   <p className="truncate text-caption capitalize text-white/75">
