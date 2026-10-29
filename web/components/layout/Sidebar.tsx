@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useSession } from "next-auth/react";
@@ -18,9 +19,16 @@ import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/feedback";
 import { Logo, LogoMark } from "@/components/common/Logo";
-import { RoleEmblem } from "@/components/common/RoleEmblem";
 import { AccountMenu } from "@/components/layout/AccountMenu";
 import { activeHref, buildNav } from "@/components/layout/nav";
+import type { RoleThemeKey } from "@/lib/roleTheme";
+
+const ROLE_CARD_IMAGES: Partial<Record<RoleThemeKey, string>> = {
+  shipper: "/roles/shipper.png",
+  carrier: "/roles/carrier.png",
+  driver: "/roles/driver.png",
+  agent: "/roles/agent.png",
+};
 
 export function Sidebar({
   collapsed = false,
@@ -34,7 +42,8 @@ export function Sidebar({
   const { data: session } = useSession();
   const pathname = usePathname();
   const { memberships, activeMembership, setActiveOrg, isLoading } = useActiveOrg();
-  const { Emblem } = useRoleTheme();
+  const { key: roleKey, Emblem } = useRoleTheme();
+  const cardImage = ROLE_CARD_IMAGES[roleKey];
 
   const user = session?.user;
   const isAdmin = user?.type === "admin";
@@ -92,16 +101,20 @@ export function Sidebar({
             </span>
           ) : (
             <div className="relative isolate overflow-hidden rounded-inset border border-white/[0.12] bg-gradient-to-br from-white/[0.1] to-white/[0.03] px-3.5 py-2.5 shadow-[inset_0_1px_0_rgb(255_255_255/0.14),0_8px_24px_-12px_rgb(0_0_0/0.5)] backdrop-blur-md transition-colors duration-500">
-              <div
-                aria-hidden
-                className="pointer-events-none absolute -right-6 -top-8 -z-10 h-20 w-20 rounded-full bg-role-accent/30 blur-2xl transition-colors duration-500"
-              />
+              {cardImage && (
+                <>
+                  <Image src={cardImage} alt="" fill sizes="256px" className="-z-20 object-cover" />
+                  <div
+                    aria-hidden
+                    className="pointer-events-none absolute inset-0 -z-10 bg-gradient-to-r from-ink/90 via-ink/70 to-ink/30"
+                  />
+                </>
+              )}
               <div
                 aria-hidden
                 className="pointer-events-none absolute inset-x-3 top-0 h-px bg-gradient-to-r from-transparent via-white/40 to-transparent"
               />
-              <RoleEmblem size="sm" className="absolute right-2.5 top-2.5" />
-              <p className="text-overline text-white/55">Acting as</p>
+              <p className="text-overline text-white/70">Acting as</p>
               {isLoading ? (
                 <div className="mt-1.5 space-y-1.5">
                   <Skeleton className="h-4 w-32 bg-white/10" />
@@ -109,10 +122,10 @@ export function Sidebar({
                 </div>
               ) : memberships.length === 1 ? (
                 <>
-                  <p className="mt-0.5 truncate pr-8 text-label font-semibold text-white">
+                  <p className="mt-0.5 truncate text-label font-semibold text-white">
                     {activeMembership?.organization?.name}
                   </p>
-                  <p className="truncate text-caption capitalize text-white/60">
+                  <p className="truncate text-caption capitalize text-white/75">
                     {COMPANY_TYPE_LABELS[companyType ?? ""] ?? companyType} · {role}
                   </p>
                 </>
