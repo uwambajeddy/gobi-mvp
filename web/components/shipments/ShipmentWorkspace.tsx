@@ -905,7 +905,7 @@ export default function ShipmentWorkspace({ id }: { id: string }) {
       </Link>
 
       <Card className="overflow-hidden">
-        <div className="grid xl:grid-cols-[minmax(0,1fr)_minmax(0,26rem)] 2xl:grid-cols-[minmax(0,1fr)_minmax(0,32rem)]">
+        <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_minmax(0,26rem)] 2xl:grid-cols-[minmax(0,1fr)_minmax(0,32rem)]">
         <div className="p-5 sm:p-6">
           <div>
             <div className="min-w-0">
