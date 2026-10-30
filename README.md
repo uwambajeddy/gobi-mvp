@@ -8,7 +8,7 @@ Gobi is **not** a courier app, ride-hailing platform or trucking marketplace. It
 
 - **Repository:** https://github.com/uwambajeddy/gobi-mvp
 - **Live app:** https://gobi-mvp.netlify.app (API: https://gobi-api-production.up.railway.app/api/v1/docs)
-- **Walkthrough video:** _link added on submission_
+- **Walkthrough video:** https://youtu.be/hnVzYC8zbrU
 - **Technical report (PDF):** [docs/Gobi-Technical-Report.pdf](docs/Gobi-Technical-Report.pdf)
 - **Track:** FullStack (Next.js frontend, Express + PostgreSQL backend)
 
