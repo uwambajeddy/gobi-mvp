@@ -7,16 +7,37 @@ Gobi is **not** a courier app, ride-hailing platform or trucking marketplace. It
 > **Design principle: manual first, integration ready.** Coordinators record operational events by hand today. Future GPS, customs or payment integrations write the *same* structured events automatically, so the workflow never changes.
 
 - **Repository:** https://github.com/uwambajeddy/gobi-mvp
-- **Demo video:** https://youtu.be/02J0hHaTpfQ
+- **Live app:** https://gobi-mvp.netlify.app (API: https://gobi-api-production.up.railway.app/api/v1/docs)
+- **Walkthrough video:** _link added on submission_
+- **Technical report (PDF):** [docs/Gobi-Technical-Report.pdf](docs/Gobi-Technical-Report.pdf)
 - **Track:** FullStack (Next.js frontend, Express + PostgreSQL backend)
 
 ## Architecture
 
 ```
 gobi-mvp/
-├── api/    Express 4 + Sequelize 6 + PostgreSQL REST API (JWT + org RBAC, gates, audit log, Swagger, Mocha tests)
-├── web/    Next.js 14 (App Router) + TypeScript + Tailwind operations workspace (NextAuth, React Query)
-└── docker-compose.yml   PostgreSQL 16 with dev + test databases
+├── api/                      Express 4 + Sequelize 6 + PostgreSQL REST API
+│   ├── src/
+│   │   ├── config/           Lifecycle, event and document-checklist definitions
+│   │   ├── controllers/      HTTP handlers, one per resource (thin: validate, call services, respond)
+│   │   ├── services/         Business rules: document and compliance gates, access policies, events, email, files
+│   │   ├── middlewares/      JWT auth, organization context, RBAC and shipment policies, validation, uploads
+│   │   ├── database/         Sequelize models (classes), migrations and seeders
+│   │   ├── routers/api/v1/   Route definitions
+│   │   ├── utils/            AppError, Logger, Socket.IO, notifications, Joi schemas
+│   │   └── docs/             Swagger (OpenAPI) spec
+│   └── tests/
+│       ├── unit/             Pure gate logic (no database)
+│       ├── api/              Integration tests over HTTP against a real test database
+│       └── performance/      autocannon load test
+├── web/                      Next.js 14 (App Router) + TypeScript + Tailwind operations workspace
+│   ├── app/                  Routes: landing, auth, dashboard (shipments, fleet, organization, admin)
+│   ├── components/           UI by feature (shipments, maps, layout, driver, ui primitives)
+│   ├── hooks/ lib/ context/  Data hooks (React Query), API client, live tracking, acting-organization context
+│   └── types/                Shared TypeScript types
+├── docs/                     Screenshots, demo documents and testing evidence (docs/testing)
+├── .github/workflows/ci.yml  API tests + web build on every push and pull request
+└── docker-compose.yml        PostgreSQL 16 with dev + test databases
 ```
 
 ```mermaid
@@ -111,9 +132,27 @@ The interface is a role-aware operations workspace: a fixed sidebar whose naviga
 | ![Shipment workspace](docs/screenshots/09-shipment-workspace.jpg) **Shipment workspace:** route map, key facts and lifecycle progress | ![Fleet compliance](docs/screenshots/10-fleet-compliance.jpg) **Fleet:** insurance, inspection and Yellow Card expiry feed the Compliance Gate |
 | ![Admin dashboard](docs/screenshots/11-admin-dashboard.jpg) **Platform admin dashboard** | ![Swagger API docs](docs/screenshots/12-swagger-api-docs.jpg) **Swagger UI** for the REST API |
 
+## Technical requirements
+
+| Requirement | Version | Notes |
+|---|---|---|
+| Node.js | 18 or later (developed on 24, CI on 20) | API and web |
+| npm | 9 or later | |
+| PostgreSQL | 16 | Provided by Docker Compose on port 5433 |
+| Docker Desktop | any recent | Only for the local database |
+| Browser | Chrome, Edge, Firefox or Safari (current) | Location sharing needs `localhost` or HTTPS |
+
+| Layer | Main frameworks and SDKs |
+|---|---|
+| API | Express 4.18, Sequelize 6.23 (`pg` 8), jsonwebtoken 8, bcryptjs, Joi 17, Socket.IO 4.8, Cloudinary SDK 2, Brevo (REST), Swagger UI |
+| Web | Next.js 14.2, React 18, TypeScript 5.9, Tailwind CSS 3.4, NextAuth 4.24, TanStack React Query 5, socket.io-client 4.8, `@vis.gl/react-google-maps` |
+| Tests | Mocha 10, Chai 4, chai-http, nyc, autocannon 7 |
+
+Optional external services: Cloudinary (document files), Brevo (email) and a Google Maps JavaScript API key (route maps). The app runs without them; uploads, emails and maps are then unavailable.
+
 ## Getting started
 
-Prerequisites: Node.js 18+, Docker Desktop.
+Prerequisites: see [Technical requirements](#technical-requirements).
 
 ```bash
 # 1. Database: creates gobi_mvp_dev + gobi_mvp_test on localhost:5433
@@ -235,18 +274,26 @@ Multi-org users select their acting organization with the `x-organization-id` he
 
 **Frontend:** Next.js 14 App Router, TypeScript, Tailwind CSS, NextAuth (credentials), TanStack React Query, React Hook Form + Zod, Axios with org-context header, socket.io-client, Lucide icons.
 
-**Tooling:** Docker Compose (PostgreSQL 16 with separate dev and test databases), sequelize-cli migrations and seeders, nodemon, ESLint (`next lint`), Git + GitHub with feature branches merged into `main`.
+**Tooling:** Docker Compose (PostgreSQL 16 with separate dev and test databases), sequelize-cli migrations and seeders, nodemon, GitHub Actions CI, Git + GitHub with feature branches merged into `main`.
 
 ## Testing
 
 ```bash
 cd api
-npm run test:ci   # resets gobi_mvp_test (migrate + seed), then runs Mocha with nyc coverage
+npm run test:ci     # resets gobi_mvp_test (migrate + seed), then runs every test with nyc coverage
+npm run test:unit   # unit tests only; no database needed
+API_URL=https://gobi-api-production.up.railway.app npm run test:load   # load test (defaults to localhost)
 ```
 
-The suite covers auth, organizations and RBAC, the shipment lifecycle, document and compliance gates (including audited overrides), operations (events, payments, exceptions, POD and closure) and the admin endpoints.
+| Strategy | What it covers | Result |
+|---|---|---|
+| Unit (`tests/unit`) | The Document and Compliance Gate rules in isolation: expiry boundaries (expires today passes, yesterday fails), capacity and 56 t GVW limits, cross-border-only Yellow Card, warnings vs. blocking failures | 17 passing |
+| Integration (`tests/api`) | Every endpoint over HTTP against a real PostgreSQL database: auth, organizations and RBAC, the shipment lifecycle, gates with audited overrides, events, payments, exceptions, POD and closure, files, notifications, live tracking, admin, and authorization (who may and may not act) | 137 passing |
+| Performance | autocannon against the deployed API (10 connections × 10 s per scenario) | Reads: p50 204–231 ms, 40–45 req/s, 0 errors. Login (bcrypt): p50 604 ms. [Results](docs/testing/load-test-production.txt) |
+| Compatibility (`cd web && npm run test:compat`) | Playwright walkthrough of the deployed app (sign in, shipments list, cross-border shipment, Google route, timeline and documents tabs) on Chrome 156, Edge 156, Firefox 132, WebKit 18.2, and emulated Pixel 7 and iPhone 14; plus a manual pass in desktop Chrome | All pass, 0 console errors, no sideways scrolling. Found and fixed a mobile layout bug (shipment summary clipped on phones). [Results and screenshots](docs/testing/compatibility) |
+| Front-end quality | Lighthouse on the deployed web app, mobile and desktop profiles | Desktop: performance 90, accessibility 96, best practices 100, SEO 100. Mobile: 62 / 96 / 100 / 100. [Desktop](docs/testing/lighthouse-desktop.html) · [mobile](docs/testing/lighthouse-mobile.html) |
 
-Current result: **52 passing**, with 78% statement and 80% line coverage. The web app is verified with a production build (`cd web && npm run build`).
+Current result: **154 passing, 0 failing**, with 87.8% statement and 88.4% line coverage ([summary](docs/testing/coverage-summary.txt)). CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs the full suite against a PostgreSQL 16 service container and the web production build (which type-checks) on every push to `main` and every pull request.
 
 ## Deployment plan
 
@@ -273,7 +320,6 @@ The demo environment runs on two managed services:
 
 **Before real users**
 
-- Add a GitHub Actions workflow that runs `npm run test:ci` against a Postgres service container and `npm run build` for the web app on every pull request.
 - Restrict CORS on the API to the web app's origin (it is open for local development).
 - Payment proofs still record a file name only; move them to the same private Cloudinary storage as documents.
 - Generate long random JWT and NextAuth secrets per environment, and enable automated database backups.

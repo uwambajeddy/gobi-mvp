@@ -1,0 +1,244 @@
+[
+  {
+    "target": "Chrome (Windows 11)",
+    "steps": [
+      {
+        "label": "Landing page loads",
+        "ok": true,
+        "ms": 4167
+      },
+      {
+        "label": "Sign in as shipper",
+        "ok": true,
+        "ms": 6016
+      },
+      {
+        "label": "Shipments list and filter",
+        "ok": true,
+        "ms": 1520
+      },
+      {
+        "label": "Open cross-border shipment",
+        "ok": true,
+        "ms": 2235
+      },
+      {
+        "label": "Route measured (Google Maps)",
+        "ok": true,
+        "ms": 4744
+      },
+      {
+        "label": "Timeline and Documents tabs",
+        "ok": true,
+        "ms": 2270
+      }
+    ],
+    "consoleErrors": [],
+    "pageErrors": [],
+    "version": "156.0.8078.49",
+    "horizontalOverflowPx": 0,
+    "passed": true
+  },
+  {
+    "target": "Edge (Windows 11)",
+    "steps": [
+      {
+        "label": "Landing page loads",
+        "ok": true,
+        "ms": 4994
+      },
+      {
+        "label": "Sign in as shipper",
+        "ok": true,
+        "ms": 6151
+      },
+      {
+        "label": "Shipments list and filter",
+        "ok": true,
+        "ms": 1778
+      },
+      {
+        "label": "Open cross-border shipment",
+        "ok": true,
+        "ms": 1731
+      },
+      {
+        "label": "Route measured (Google Maps)",
+        "ok": true,
+        "ms": 5262
+      },
+      {
+        "label": "Timeline and Documents tabs",
+        "ok": true,
+        "ms": 1894
+      }
+    ],
+    "consoleErrors": [],
+    "pageErrors": [],
+    "version": "156.0.4314.50",
+    "horizontalOverflowPx": 0,
+    "passed": true
+  },
+  {
+    "target": "Firefox (Windows 11)",
+    "steps": [
+      {
+        "label": "Landing page loads",
+        "ok": true,
+        "ms": 6789
+      },
+      {
+        "label": "Sign in as shipper",
+        "ok": true,
+        "ms": 7278
+      },
+      {
+        "label": "Shipments list and filter",
+        "ok": true,
+        "ms": 2604
+      },
+      {
+        "label": "Open cross-border shipment",
+        "ok": true,
+        "ms": 2087
+      },
+      {
+        "label": "Route measured (Google Maps)",
+        "ok": true,
+        "ms": 5210
+      },
+      {
+        "label": "Timeline and Documents tabs",
+        "ok": true,
+        "ms": 2418
+      }
+    ],
+    "consoleErrors": [],
+    "pageErrors": [],
+    "version": "132.0",
+    "horizontalOverflowPx": 0,
+    "passed": true
+  },
+  {
+    "target": "WebKit / Safari engine",
+    "steps": [
+      {
+        "label": "Landing page loads",
+        "ok": true,
+        "ms": 7061
+      },
+      {
+        "label": "Sign in as shipper",
+        "ok": true,
+        "ms": 11761
+      },
+      {
+        "label": "Shipments list and filter",
+        "ok": true,
+        "ms": 2440
+      },
+      {
+        "label": "Open cross-border shipment",
+        "ok": true,
+        "ms": 2572
+      },
+      {
+        "label": "Route measured (Google Maps)",
+        "ok": true,
+        "ms": 9212
+      },
+      {
+        "label": "Timeline and Documents tabs",
+        "ok": true,
+        "ms": 3649
+      }
+    ],
+    "consoleErrors": [],
+    "pageErrors": [],
+    "version": "18.2",
+    "horizontalOverflowPx": 0,
+    "passed": true
+  },
+  {
+    "target": "Android phone (Pixel 7, Chromium)",
+    "steps": [
+      {
+        "label": "Landing page loads",
+        "ok": true,
+        "ms": 11154
+      },
+      {
+        "label": "Sign in as shipper",
+        "ok": true,
+        "ms": 5627
+      },
+      {
+        "label": "Shipments list and filter",
+        "ok": true,
+        "ms": 1350
+      },
+      {
+        "label": "Open cross-border shipment",
+        "ok": true,
+        "ms": 1881
+      },
+      {
+        "label": "Route measured (Google Maps)",
+        "ok": true,
+        "ms": 5577
+      },
+      {
+        "label": "Timeline and Documents tabs",
+        "ok": true,
+        "ms": 2787
+      }
+    ],
+    "consoleErrors": [],
+    "pageErrors": [],
+    "version": "131.0.6778.33",
+    "horizontalOverflowPx": 0,
+    "passed": true
+  },
+  {
+    "target": "iPhone 14 (WebKit)",
+    "steps": [
+      {
+        "label": "Landing page loads",
+        "ok": true,
+        "ms": 6936
+      },
+      {
+        "label": "Sign in as shipper",
+        "ok": true,
+        "ms": 16536
+      },
+      {
+        "label": "Shipments list and filter",
+        "ok": true,
+        "ms": 2792
+      },
+      {
+        "label": "Open cross-border shipment",
+        "ok": true,
+        "ms": 3979
+      },
+      {
+        "label": "Route measured (Google Maps)",
+        "ok": true,
+        "ms": 10542
+      },
+      {
+        "label": "Timeline and Documents tabs",
+        "ok": true,
+        "ms": 5274
+      }
+    ],
+    "consoleErrors": [
+      "Failed to load resource: the server responded with a status of 429 ()"
+    ],
+    "pageErrors": [],
+    "version": "18.2",
+    "horizontalOverflowPx": 0,
+    "passed": true
+  }
+]

@@ -18,6 +18,8 @@
     "test:setup": "cross-env NODE_ENV=test npm run down && cross-env NODE_ENV=test npm run up && cross-env NODE_ENV=test npm run seed",
     "test": "cross-env NODE_ENV=test nyc mocha --require ./tests/bootstrap.js --require @babel/register ./tests/**/*.test.js --timeout 30000 --exit",
     "test:ci": "npm run test:setup && npm test",
+    "test:load": "node tests/performance/load-test.js",
+    "test:unit": "cross-env NODE_ENV=test mocha --require ./tests/bootstrap.js --require @babel/register ./tests/unit/*.test.js --exit",
     "aio": "cross-env NODE_ENV=development npm run up && cross-env NODE_ENV=development npm run seed && npm run dev"
   },
   "author": "Uwambaje Eddy",
@@ -30,6 +32,7 @@
     "@babel/preset-env": "^7.15.0",
     "@babel/register": "^7.17.7",
     "@babel/runtime": "^7.17.9",
+    "autocannon": "^7.15.0",
     "babel-plugin-add-module-exports": "^1.0.4",
     "babel-plugin-istanbul": "^6.1.1",
     "babel-plugin-module-resolver": "^4.1.0",
