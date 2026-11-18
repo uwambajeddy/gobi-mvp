@@ -1,6 +1,6 @@
 # Demo documents
 
-These are the files to upload in step 6 of the demo script in [gobi-system-journey.html](../gobi-system-journey.html). There is one folder per demo account. Every file is a fictional specimen marked "Demo specimen" and is not a valid document. Gobi stores uploaded files without reading them, so these files only make the demo look real.
+These are the files to upload in step 3 of the [demo walkthrough](../../README.md#demo-walkthrough). There is one folder per demo account. Every file is a fictional specimen marked "Demo specimen" and is not a valid document. Gobi stores uploaded files without reading them, so these files only make the demo look real.
 
 ## Create the shipment so the papers match
 
@@ -34,4 +34,4 @@ That's 23,400 kg in total, which fits truck RAE 001 T (30,000 kg). The papers na
 
 **Proof of delivery.** When the driver captures POD, enter the receiver as Jean Bosco Nshimiyimana, the name that signed the delivery note.
 
-**Customs duty payment.** In step 11 the agent records a payment of 26,686,610 RWF, the total on the duty receipt. Attach `2-duty-payment-receipt.pdf` as the proof.
+**Customs duty payment.** The agent records a payment of 26,686,610 RWF, the total on the duty receipt. Attach `2-duty-payment-receipt.pdf` as the proof.
