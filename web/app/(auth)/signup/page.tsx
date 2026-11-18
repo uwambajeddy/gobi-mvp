@@ -53,6 +53,7 @@ function SignupForm() {
   const [verifying, setVerifying] = useState(false);
   const [resending, setResending] = useState(false);
   const [now, setNow] = useState(() => Date.now());
+  // Kept in memory only, to sign in once the account exists.
   const credentials = useRef<{ email: string; password: string } | null>(null);
 
   const { data: invitation } = useQuery({

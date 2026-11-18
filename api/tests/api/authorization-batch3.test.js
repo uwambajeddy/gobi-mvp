@@ -14,6 +14,12 @@ import { pdfFile } from "../helpers/files.helper";
 import { createOrRefreshInvitation } from "../../src/services/invitations.service";
 import db from "../../src/database/models";
 
+/**
+ * Regression tests for audit findings F-07 (closed shipments take no new
+ * reviews, payments or exceptions), F-08 (the driver role exists only in
+ * transport organizations) and F-11 (malformed ids are a 400, never a 500).
+ */
+
 const S = (id) => `/api/v1/shipments/${id}`;
 
 const firstDocWithStatus = async (tokens, shipmentId, status) =>

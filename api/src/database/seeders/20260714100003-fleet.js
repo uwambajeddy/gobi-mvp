@@ -3,6 +3,8 @@ const now = new Date();
 
 module.exports = {
   async up(queryInterface) {
+    // driver@gobi.rw: fully compliant. driver2@gobi.rw: licence EXPIRED
+    // (demonstrates the compliance gate blocking an assignment).
     await queryInterface.bulkInsert("driver_profiles", [
       {
         id: 1,
@@ -24,6 +26,8 @@ module.exports = {
       },
     ]);
 
+    // Fleet: one fully compliant truck, one with expired insurance (gate demo),
+    // one van with no COMESA Yellow Card on file (cross-border warning).
     await queryInterface.bulkInsert("vehicles", [
       {
         id: 1,

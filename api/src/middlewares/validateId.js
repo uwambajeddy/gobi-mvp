@@ -7,6 +7,10 @@ export const MAX_ID = 2147483647;
 
 export const isValidId = (value) => /^[1-9]\d{0,9}$/.test(String(value ?? "")) && Number(value) <= MAX_ID;
 
+/**
+ * `router.param` handler: a malformed id is the client's mistake (400),
+ * never a database error (500).
+ */
 const validateIdParam = (req, res, next, value, name) =>
   isValidId(value)
     ? next()

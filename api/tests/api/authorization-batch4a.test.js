@@ -11,6 +11,11 @@ import {
 } from "../../src/utils/validationSchemas";
 import db from "../../src/database/models";
 
+/**
+ * Regression tests for audit finding F-09 (nobody becomes a carrier's driver
+ * without accepting) and for list filters with invalid enum values (400, not 500).
+ */
+
 const S = (id) => `/api/v1/shipments/${id}`;
 
 const carrierWithShipment = async () => {

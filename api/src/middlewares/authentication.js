@@ -23,6 +23,13 @@ const membershipIncludes = [
   },
 ];
 
+/**
+ * Resolves the caller's active organization membership.
+ *
+ * Multi-org users select their acting organization with the
+ * `x-organization-id` header (set by the web app's org switcher);
+ * single-org users fall back to their only membership.
+ */
 const applyActiveOrganization = (req) => {
   const memberships = req.user.memberships || [];
   const headerVal = req.headers["x-organization-id"];
@@ -74,6 +81,11 @@ export const protect = catchAsync(async (req, res, next) => {
   next();
 });
 
+/**
+ * Socket.IO authentication guard, used with `io.use` (see server.js).
+ * Same checks as `protect`, with the access token read from the handshake
+ * (`auth.token`, or `?token=`). The user is kept on `socket.userInfo`.
+ */
 export const protectSocket = async (socket, next) => {
   try {
     const accessToken = socket.handshake.auth?.token || socket.handshake.query?.token;

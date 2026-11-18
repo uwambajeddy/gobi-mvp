@@ -121,6 +121,8 @@ export function TimelinePanel({
   });
 
   const canRecord = Boolean(access.can?.recordEvent);
+  // The driver's progress steps belong to the carrier's coordinators and the
+  // assigned driver, who taps them on the progress card rather than picking them here.
   const eventTypes = MANUAL_EVENT_TYPES.filter(
     (type) =>
       !DRIVER_MILESTONES.includes(type) || (access.can?.recordStatusMilestone && !access.isAssignedDriver),

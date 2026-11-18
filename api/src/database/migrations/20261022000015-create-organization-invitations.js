@@ -1,4 +1,11 @@
 "use strict";
+/**
+ * Invitations for people who don't have a Gobi account yet. The emailed link
+ * carries a random token; only its SHA-256 hash is stored, so the table alone
+ * can't be used to accept an invitation.
+ *
+ * @type {import('sequelize-cli').Migration}
+ */
 module.exports = {
   async up(queryInterface, Sequelize) {
     await queryInterface.createTable("organization_invitations", {

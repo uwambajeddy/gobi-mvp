@@ -4,6 +4,7 @@ import { protect } from "../../../middlewares/authentication";
 
 const router = express.Router();
 
+// Public: the emailed link opens before the invitee has an account.
 router.get("/:token", getInvitation);
 router.post("/:token/accept", protect, acceptInvitation);
 

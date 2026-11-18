@@ -34,6 +34,8 @@ const documentVariants: Record<DocumentStatus, Variant> = {
   rejected: "destructive",
 };
 
+// "required" is the API's state for "nothing uploaded yet"; it also applies
+// to optional documents, so the label describes the state instead.
 const documentLabels: Record<DocumentStatus, string> = {
   required: "Not uploaded",
   uploaded: "Uploaded",

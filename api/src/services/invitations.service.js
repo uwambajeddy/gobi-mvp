@@ -5,6 +5,7 @@ const { organization_invitations, organizations, users } = db;
 
 export const INVITATION_TTL_DAYS = 7;
 
+/** The emailed token is random; only its hash is stored. */
 export const hashInvitationToken = (token = "") => crypto.createHash("sha256").update(String(token)).digest("hex");
 
 export const invitationInclude = [

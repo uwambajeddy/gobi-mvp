@@ -2,6 +2,11 @@ import { type ClassValue, clsx } from "clsx";
 import { formatDistanceToNowStrict } from "date-fns";
 import { extendTailwindMerge } from "tailwind-merge";
 
+/**
+ * tailwind-merge must know the custom design tokens from tailwind.config.ts.
+ * Unregistered `text-*` names are treated as colours, so `text-label` would
+ * silently delete `text-white` (and vice versa) when classes are merged.
+ */
 const twMerge = extendTailwindMerge({
   extend: {
     classGroups: {

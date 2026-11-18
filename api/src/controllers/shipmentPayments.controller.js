@@ -41,6 +41,7 @@ const storeProof = async (file, shipmentId) => {
 
   return {
     proofFileName: cleanFileName(file.originalname, "proof"),
+    // The stored file is private; clients view it through GET /payments/:paymentId/proof.
     proofUrl: null,
     proofFileKey: stored.key,
     proofResourceType: stored.resourceType,

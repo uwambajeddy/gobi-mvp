@@ -10,6 +10,10 @@ export const UNSUPPORTED_ROLE_MESSAGE = "The driver role is only available in tr
 export const companyTypeOf = (req, organizationId) =>
   (req.user.memberships || []).find((m) => m.organizationId === organizationId)?.organization?.companyType;
 
+/**
+ * Whether the caller may hand out `role` in the organization. Owner rights
+ * can only come from an owner; coordinators may grant every other role.
+ */
 export const canGrantRole = (req, organizationId, role) =>
   role !== "owner" || hasOrgRole(req, organizationId, ["owner"]);
 

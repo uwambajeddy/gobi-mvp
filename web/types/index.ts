@@ -223,6 +223,7 @@ export interface ShipmentAccess {
   isCarrierCoordinator: boolean;
   isAgentCoordinator: boolean;
   isParty: boolean;
+  /** Per-action verdicts from the API's shipment policies (keys of SHIPMENT_POLICIES). */
   can?: Record<string, boolean>;
 }
 

@@ -39,6 +39,8 @@ export function ExceptionsPanel({
   const [resolving, setResolving] = useState<number | null>(null);
   const [resolutionNotes, setResolutionNotes] = useState("");
 
+  // The workspace payload omits who opened/resolved each exception; the
+  // dedicated endpoint includes them. Fall back to the payload while loading.
   const queryKey = ["shipment-exceptions", String(shipment.id)];
   const { data: detailed } = useQuery({
     queryKey,

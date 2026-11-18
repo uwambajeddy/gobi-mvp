@@ -250,6 +250,12 @@ function PodForm({
   );
 }
 
+/* Lifecycle actions: status + role driven                              */
+
+/**
+ * Points the user at the workspace tab where their next action lives.
+ * Conditions mirror the ones each panel uses to show its controls.
+ */
 function tabHint(shipment: Shipment, access: ShipmentAccess): { text: string; tab: Tab; cta: string } | null {
   const party = access.isShipper || access.isCarrier || access.isAgent;
   if (access.isCarrierCoordinator && ["awaiting_documents", "documents_complete"].includes(shipment.status)) {
@@ -337,6 +343,7 @@ function LifecycleActions({
       run: () => simpleAction.mutate("approve-quote"),
     });
   }
+  // The assigned driver confirms delivery from their progress card instead.
   if (access.isCarrierCoordinator && shipment.status === "arrived") {
     actions.push({ key: "pod", label: "Capture POD", variant: "default" });
   }
@@ -809,6 +816,8 @@ export default function ShipmentWorkspace({ id }: { id: string }) {
   const [tab, setTab] = useState<Tab>("timeline");
   const [focusTab, setFocusTab] = useState<Tab | null>(null);
 
+  // After a "next step" shortcut switches tabs, bring the panel into view and
+  // move focus to its tab so keyboard users continue from there.
   useEffect(() => {
     if (!focusTab) return;
     const timer = window.setTimeout(() => {
@@ -855,6 +864,7 @@ export default function ShipmentWorkspace({ id }: { id: string }) {
   const cargoKg = cargoWeightKg(shipment);
   const mandatory = documents.filter((doc) => doc.mandatory);
   const satisfied = mandatory.filter((doc) => ["uploaded", "verified"].includes(doc.status));
+  // Quotes and payments are not shared with drivers; the API leaves them out.
   const canSeeMoney = Boolean(access.can?.viewFinancials);
   const showDriverProgress = Boolean(shipment.assignedDriverId) && DRIVER_PROGRESS_STATUSES.includes(shipment.status);
 

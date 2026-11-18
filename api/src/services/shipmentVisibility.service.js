@@ -1,5 +1,12 @@
 import { checkShipmentPolicy } from "./shipmentAccess.service";
 
+/**
+ * Field-level visibility on shipment responses. Authorization decides who
+ * may open a shipment; this decides what they see inside it. Today that is
+ * money: quotes and payment amounts reach only FINANCIAL_VIEWERS
+ * (config/shipmentPolicies), never the assigned driver.
+ */
+
 const QUOTE_FIELDS = ["quoteAmount", "quoteCurrency"];
 
 const FINANCIAL_EVENTS = ["quote_approved", "payment_recorded"];

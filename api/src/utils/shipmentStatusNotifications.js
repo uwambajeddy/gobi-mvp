@@ -33,6 +33,7 @@ export const notifyShipmentStatusChange = async (
 
     const actionUrl = appUrl(`/dashboard/shipments/${shipment.id}`);
     const entity = { type: NOTIFICATION_ENTITY_TYPES.SHIPMENT, id: shipment.id };
+    // One notification per person, never to whoever made the change.
     const notified = new Set([actorUserId]);
     const notify = async (userIds, title, message) => {
       for (const userId of userIds) {

@@ -12,6 +12,7 @@ module.exports = (sequelize, DataTypes) => {
       this.hasMany(activity_logs, { foreignKey: "actorId", as: "activityLogs" });
     }
 
+    /** Never expose the password hash in JSON responses. */
     toJSON() {
       const values = { ...this.get() };
       delete values.password;

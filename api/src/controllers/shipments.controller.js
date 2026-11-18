@@ -22,6 +22,7 @@ import db from "../database/models";
 
 const { ok, created, badRequest, notFound, conflict } = statusCodes;
 
+/** A conditional update found the shipment no longer in the state it was read in. */
 const shipmentChanged = () =>
   new AppError("This shipment changed while you were working on it. Reload it and try again.", conflict);
 const {
@@ -171,6 +172,10 @@ export const cancelShipment = catchAsync(async (req, res) => {
   return successResponse(res, ok, { shipment });
 });
 
+/**
+ * POST /api/v1/shipments/:id/assign-carrier: shipper picks the transport company.
+ * A quote belongs to the carrier that gave it, so changing the carrier clears it.
+ */
 export const assignCarrier = catchAsync(async (req, res, next) => {
   const { shipment } = req;
 
@@ -244,6 +249,8 @@ export const assignClearingAgent = catchAsync(async (req, res, next) => {
 export const submitQuote = catchAsync(async (req, res, next) => {
   const { shipment } = req;
 
+  // Only while this carrier is still assigned, so a quote never lands on a
+  // shipment that changed hands mid-request.
   const [updated] = await shipments.update(
     { quoteAmount: req.body.amount, quoteCurrency: req.body.currency || "RWF" },
     { where: { id: shipment.id, status: "submitted", transportOrgId: shipment.transportOrgId } },
@@ -259,6 +266,7 @@ export const submitQuote = catchAsync(async (req, res, next) => {
     description: `Quoted ${req.body.amount} ${req.body.currency || "RWF"} for ${shipment.reference}`,
     metadata: { amount: req.body.amount, currency: req.body.currency || "RWF" },
   });
+  // A quote has no timeline event, so its email is queued here.
   notifyShipmentEvent("quote_submitted", { shipmentId: shipment.id, actorUserId: req.user.id });
 
   return successResponse(res, ok, { shipment });
@@ -273,6 +281,7 @@ export const approveQuote = catchAsync(async (req, res, next) => {
     );
   }
 
+  // Approves exactly the quote and carrier the shipper was shown.
   const [updated] = await shipments.update(
     { status: "quote_approved", quoteApprovedAt: new Date() },
     {
@@ -355,9 +364,14 @@ export const capturePod = catchAsync(async (req, res) => {
     message: `${shipment.reference}: Delivered, received by ${podRecipientName}`,
   });
 
+  // The assigned driver may capture POD, so the response follows their visibility.
   return successResponse(res, ok, { shipment: presentShipment(shipment, req.access) });
 });
 
+/**
+ * POST /api/v1/shipments/:id/complete: shipper confirms receipt.
+ * Closure rule: POD captured + no open exceptions.
+ */
 export const completeShipment = catchAsync(async (req, res, next) => {
   const { shipment } = req;
 

@@ -23,6 +23,13 @@ export const getInvitation = catchAsync(async (req, res, next) => {
   return successResponse(res, ok, { invitation, hasAccount });
 });
 
+/**
+ * POST /api/v1/invitations/:token/accept: join the organization. Needs the
+ * emailed token (proof of access to the inbox) and a signed-in account with
+ * the invited email address. An owner invitation only grants ownership while
+ * the person who sent it is still an owner, and a driver invitation only
+ * works for a transport organization (older invitations may predate both rules).
+ */
 export const acceptInvitation = catchAsync(async (req, res, next) => {
   const invitation = await findInvitationByToken(req.params.token);
   if (!invitation) {

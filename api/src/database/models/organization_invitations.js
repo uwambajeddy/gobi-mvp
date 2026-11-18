@@ -13,6 +13,7 @@ module.exports = (sequelize, DataTypes) => {
       return this.status === "pending" && new Date(this.expiresAt) < new Date();
     }
 
+    /** The token hash never leaves the server; `status` reports expiry too. */
     toJSON() {
       const values = { ...this.get() };
       delete values.tokenHash;

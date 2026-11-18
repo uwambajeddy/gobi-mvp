@@ -74,6 +74,7 @@ export function DocumentsPanel({
       form.append("docType", docType);
       form.append("file", file as File);
       return axios.post(`/api/v1/shipments/${shipment.id}/documents`, form, {
+        // Overrides the client's JSON default; the browser adds the boundary.
         headers: { "Content-Type": "multipart/form-data" },
         onUploadProgress: (event) => {
           if (event.total) setProgress(Math.round((event.loaded / event.total) * 100));

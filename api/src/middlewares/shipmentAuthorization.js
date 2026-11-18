@@ -16,6 +16,11 @@ const CHILD_RECORDS = {
 
 const DISCARD_LIMIT_BYTES = MAX_FILE_BYTES + 1024 * 1024;
 
+/**
+ * Reads and throws away a request body nobody parsed, so a refused upload
+ * still receives its response instead of a reset connection. Nothing is
+ * kept or inspected; a body larger than any allowed upload is cut off.
+ */
 const discardUnreadBody = (req) =>
   new Promise((resolve) => {
     if (req.complete) return resolve();
@@ -32,6 +37,21 @@ const discardUnreadBody = (req) =>
     req.on("error", resolve);
   });
 
+/**
+ * Shipment authorization guard. Use after `protect`.
+ *
+ * Loads the shipment from `:id`, or from a child record (`from: "document"`,
+ * `"payment"`, `"exception"`), computes the caller's access and applies the
+ * action's policy (config/shipmentPolicies). On success the handler gets
+ * `req.shipment`, `req.access` and, for child routes, `req.document` /
+ * `req.payment` / `req.exception`.
+ *
+ * On upload routes it runs before the file parser: a refused request's
+ * file is discarded unread, never buffered, checked or stored.
+ *
+ * @param {string} action a key of SHIPMENT_POLICIES
+ * @param {{from?: "shipment"|"document"|"payment"|"exception", include?: Array}} options
+ */
 export const authorizeShipment = (action, { from = "shipment", include = [] } = {}) =>
   catchAsync(async (req, res, next) => {
     const refuse = async (error) => {

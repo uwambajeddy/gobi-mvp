@@ -49,6 +49,14 @@ const createVerifiedUser = async (req, { firstName, lastName, email, phoneNumber
   return user;
 };
 
+/**
+ * POST /api/v1/auth/register
+ * Starts a sign-up. No account exists until the email is proven: the response
+ * is a `verification` handle and a 6-digit code goes to the address, to be
+ * entered via POST /auth/verify-email. With an `inviteToken` for the same
+ * email, the invitation already proves the inbox, so the account (`user`) is
+ * created at once. Organization roles are granted separately.
+ */
 export const register = catchAsync(async (req, res, next) => {
   const { firstName, lastName, email, phoneNumber, password, inviteToken } = req.body;
 
@@ -100,6 +108,7 @@ export const verifyEmail = catchAsync(async (req, res, next) => {
     );
   }
 
+  // Another sign-up for this email may have finished first.
   if (await users.count({ where: { email: signup.email } })) {
     await signup.destroy();
     return next(new AppError("An account with this email already exists. Sign in instead.", conflict));

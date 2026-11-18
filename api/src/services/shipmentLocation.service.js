@@ -2,6 +2,7 @@ import db from "../database/models";
 
 const { shipments } = db;
 
+/** Tracking points kept per shipment, to avoid database bloat. */
 const MAX_TRACKING_POINTS = 100;
 
 export const recordShipmentLocation = async ({ shipment, latitude, longitude }) => {
@@ -13,6 +14,7 @@ export const recordShipmentLocation = async ({ shipment, latitude, longitude }) 
   const currentTrackings = shipment.trackings || [];
   currentTrackings.push(newTracking);
 
+  // `silent`: a location ping is not an edit, so updatedAt is left alone.
   await shipments.update(
     {
       trackings: currentTrackings.slice(-MAX_TRACKING_POINTS),

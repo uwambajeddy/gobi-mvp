@@ -8,6 +8,7 @@ module.exports = (sequelize, DataTypes) => {
       this.belongsTo(users, { foreignKey: "recordedByUserId", as: "recordedBy" });
     }
 
+    /** Storage details stay server-side; clients get `hasProof` and fetch a signed link. */
     toJSON() {
       const values = { ...this.get() };
       values.hasProof = Boolean(values.proofFileKey);

@@ -8,6 +8,12 @@ import { cn } from "@/lib/utils";
 const GAP = 8;
 const EDGE = 12;
 
+/**
+ * Small explanation shown on hover, keyboard focus or tap. Rendered in a
+ * portal with fixed coordinates so cards with overflow-hidden don't clip it;
+ * it sits above the trigger, flips below when there is no room, and stays
+ * inside the viewport horizontally. Escape closes it.
+ */
 export function Tooltip({
   content,
   children,

@@ -18,6 +18,7 @@ export const ATTENTION_STATUSES: ShipmentStatus[] = [
   "delivered",
 ];
 
+/** Statuses from which the shipper can still cancel (mirrors the API). */
 export const CANCELLABLE_STATUSES: ShipmentStatus[] = [
   "draft",
   "submitted",
@@ -27,12 +28,20 @@ export const CANCELLABLE_STATUSES: ShipmentStatus[] = [
   "execution_assigned",
 ];
 
+/**
+ * Live tracking runs from "Going to pickup" until arrival: in transit, and
+ * before pickup once the driver has set off (mirrors the API's isTrackingActive).
+ */
 export const TRACKING_STATUSES: ShipmentStatus[] = ["execution_assigned", "in_transit"];
 
 export const isTrackingActive = (shipment: Pick<Shipment, "status" | "startTime">) =>
   TRACKING_STATUSES.includes(shipment.status) &&
   (shipment.status !== "execution_assigned" || Boolean(shipment.startTime));
 
+/**
+ * The driver's progress milestones, in order: one button each (mirrors the
+ * API's DRIVER_MILESTONES). Proof of delivery is the last step.
+ */
 export const DRIVER_MILESTONES = ["en_route_to_pickup", "arrived_pickup", "picked_up", "arrived_destination"];
 
 export const FILTER_STATUSES: ShipmentStatus[] = [

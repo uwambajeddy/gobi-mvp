@@ -17,6 +17,7 @@ export function ShipmentStatusListener() {
     if (!socket || !connected) return;
 
     const handleShipmentStatusUpdate = (data: ShipmentStatusUpdate) => {
+      // Whoever made the change already got their own confirmation.
       if (data.actorUserId !== userId) {
         toast.success(data.message || "Shipment status updated!");
       }

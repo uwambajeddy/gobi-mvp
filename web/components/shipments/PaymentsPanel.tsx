@@ -20,6 +20,7 @@ import { PAYMENT_TYPE_LABELS } from "@/lib/labels";
 import { cn, formatDateTime, formatPrice, fullName } from "@/lib/utils";
 import { Shipment, ShipmentAccess, ShipmentPayment } from "@/types";
 
+// Overrides the client's JSON default; the browser adds the boundary.
 const MULTIPART = { "Content-Type": "multipart/form-data" };
 
 export function PaymentsPanel({ shipment, access }: { shipment: Shipment; access: ShipmentAccess }) {
@@ -30,6 +31,7 @@ export function PaymentsPanel({ shipment, access }: { shipment: Shipment; access
   const [amount, setAmount] = useState("");
   const [proof, setProof] = useState<File | null>(null);
   const [proofError, setProofError] = useState<string>();
+  // Remounts the file input so a recorded payment clears the picked file.
   const [formKey, setFormKey] = useState(0);
   const [progress, setProgress] = useState<number | null>(null);
   const [viewingId, setViewingId] = useState<number | null>(null);
@@ -329,6 +331,7 @@ export function PaymentsPanel({ shipment, access }: { shipment: Shipment; access
         )}
       </Card>
 
+      {/* One hidden picker serves every row's "Attach proof" button; clicking it from code still opens the dialog. */}
       {canSettle && (
         <input
           ref={attachInput}

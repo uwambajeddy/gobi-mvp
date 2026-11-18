@@ -4,6 +4,7 @@ import { cn } from "@/lib/utils";
 import { formatDistance, formatDuration } from "@/lib/maps";
 import type { ShipmentGeo } from "@/hooks/useShipmentGeo";
 
+/** Two-letter country tag (emoji flags don't render on Windows). */
 export function CountryTag({ code, name }: { code?: string; name?: string }) {
   if (!code) return null;
   return (

@@ -1,8 +1,20 @@
 import crypto from "crypto";
 import { v2 as cloudinary } from "cloudinary";
 
+/**
+ * Document file storage.
+ *
+ * Files go to Cloudinary as `authenticated` assets, so they are never
+ * publicly reachable. Viewing always goes through `signedFileUrl`, which
+ * returns a download link that expires after a few minutes; the API only
+ * hands it out after checking that the caller is a party to the shipment.
+ *
+ * Tests use an in-memory driver so they never touch Cloudinary.
+ */
+
 export const MAX_FILE_BYTES = 10 * 1024 * 1024;
 
+/** Accepted types, identified by their leading bytes rather than the client's claim. */
 const FILE_TYPES = [
   { mimeType: "application/pdf", extension: "pdf", resourceType: "raw", magic: [0x25, 0x50, 0x44, 0x46] },
   { mimeType: "image/png", extension: "png", resourceType: "image", magic: [0x89, 0x50, 0x4e, 0x47] },

@@ -18,6 +18,8 @@ import db from "../database/models";
 const { ok, badRequest } = statusCodes;
 const { shipment_documents, shipment_packages, vehicles, users, driver_profiles, organization_members } = db;
 
+// A selection outside the shipment's carrier gets the same answer as an id
+// that does not exist, so neither route reveals another carrier's fleet.
 const VEHICLE_NOT_IN_FLEET = "The selected vehicle is not in the assigned carrier's fleet.";
 const NOT_A_CARRIER_DRIVER = "The selected driver is not a driver member of the assigned carrier.";
 
@@ -100,6 +102,7 @@ export const assignExecution = catchAsync(async (req, res, next) => {
 
   const { documentGate, complianceGate, cargoKg } = await evaluateGates(shipment, vehicle, driver);
 
+  // Gate enforcement (overridable, but always audited)
   if (!documentGate.passed && !overrideDocumentGate) {
     return next(
       new AppError(

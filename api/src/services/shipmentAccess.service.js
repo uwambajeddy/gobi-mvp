@@ -9,6 +9,10 @@ const { shipments, organizations, users, vehicles, shipment_packages } = db;
 
 export const COORDINATOR_ROLES = ["owner", "coordinator"];
 
+/**
+ * Roles that act for their organization. A `driver` never does: drivers
+ * reach a shipment only through their own assignment.
+ */
 export const STAFF_ROLES = ["owner", "coordinator", "member"];
 
 const userSummary = ["id", "firstName", "lastName", "phoneNumber", "email"];
@@ -44,6 +48,7 @@ export const getShipmentAccess = (shipment, req) => {
     isShipper: STAFF_ROLES.includes(shipperRole),
     isCarrier: STAFF_ROLES.includes(carrierRole),
     isAgent: STAFF_ROLES.includes(agentRole),
+    // Assigned, and still an active driver of the carrier.
     isAssignedDriver: shipment.assignedDriverId === req.user.id && carrierRole === "driver",
     isShipperCoordinator: COORDINATOR_ROLES.includes(shipperRole),
     isCarrierCoordinator: COORDINATOR_ROLES.includes(carrierRole),
@@ -82,6 +87,11 @@ export const describeAllowedActions = (shipment, access) =>
     ]),
   );
 
+/**
+ * WHERE clause for the shipments a user may list: those where one of their
+ * organizations is a party through a non-driver role, plus those assigned
+ * to them by a carrier they still drive for. Admins see everything.
+ */
 export const shipmentScope = (req) => {
   if (req.user.type === "admin") return {};
 

@@ -51,6 +51,7 @@ export const recordEvent = catchAsync(async (req, res, next) => {
         ),
       );
     }
+    // A double tap must not record (and announce) the same step twice.
     const alreadyRecorded = await shipment_events.count({ where: { shipmentId: shipment.id, eventType } });
     if (alreadyRecorded) {
       return next(new AppError(`"${EVENT_LABELS[eventType]}" has already been recorded.`, badRequest));
@@ -71,6 +72,7 @@ export const recordEvent = catchAsync(async (req, res, next) => {
   if (milestone?.to) {
     await shipment.update({ status: milestone.to });
   }
+  // "Going to pickup" starts the trip: live tracking runs from here (config/shipmentPolicies).
   if (eventType === "en_route_to_pickup") {
     await shipment.update({ startTime: event.occurredAt });
   }

@@ -97,6 +97,7 @@ export function NotificationsMenu() {
       >
         <Bell className="h-[1.125rem] w-[1.125rem]" aria-hidden />
         {unreadCount > 0 && (
+          // Keyed on the count so a new notification replays the pop.
           <span
             key={unreadCount}
             aria-hidden

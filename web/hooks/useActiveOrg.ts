@@ -22,6 +22,11 @@ const writeCookie = (orgId: number) => {
 
 export const rememberActiveOrg = writeCookie;
 
+/**
+ * The caller's organization memberships (fresh from the API) and the
+ * currently selected acting organization, persisted in a cookie that the
+ * Axios instance forwards as `x-organization-id`.
+ */
 export function useActiveOrg() {
   const axios = useAxiosAuth();
   const { status } = useSession();
@@ -47,6 +52,7 @@ export function useActiveOrg() {
   const setActiveOrg = useCallback((orgId: number) => {
     writeCookie(orgId);
     setActiveOrgIdState(orgId);
+    // Org context changes what every query returns; simplest correct reset:
     window.location.reload();
   }, []);
 

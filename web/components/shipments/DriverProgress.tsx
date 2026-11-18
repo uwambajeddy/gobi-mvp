@@ -73,6 +73,14 @@ const AFTER_DELIVERY: ShipmentStatus[] = ["delivered", "completed"];
 
 export const DRIVER_PROGRESS_STATUSES: ShipmentStatus[] = ["execution_assigned", ...AFTER_PICKUP];
 
+/**
+ * Which steps are done, and when. Status alone can't tell "going to pickup"
+ * from "at pickup" (both are execution_assigned), so those come from the trip
+ * start and the timeline, as the old driver app derived "picked up" from
+ * pickedUpAt. A recorded event always counts, as it does for the API's
+ * "already recorded" check. A step skipped by a coordinator counts as done
+ * once a later one is.
+ */
 function progressOf(shipment: Shipment, events: ShipmentEvent[]) {
   const at = (type: string) => events.find((event) => event.eventType === type)?.occurredAt ?? null;
   const pastPickup = AFTER_PICKUP.includes(shipment.status);

@@ -17,6 +17,27 @@ import {
 } from "@/lib/driver-tracking";
 import { Shipment } from "@/types";
 
+/**
+ * Driver location tracker.
+ *
+ * Responsibilities
+ * ----------------
+ * - When the current user is a driver AND has a shipment on the road (from
+ *   "Going to pickup" until arrival) AND has tracking switched on: subscribe
+ *   to `navigator.geolocation.watchPosition`
+ *   and stream coordinates to the server.
+ * - Throttle outgoing updates (time + distance) to avoid flooding.
+ * - Send each fix on the realtime socket (`newCoordinates`, best-effort) and
+ *   save it over REST (authoritative, kept on the shipment).
+ * - Track and surface permission state, support state, last send timestamp.
+ *
+ * Limitations
+ * -----------
+ * Browsers only report GPS to a page that is running. When the OS suspends
+ * the page (screen locked, iOS background), tracking pauses and resumes
+ * automatically on next visibility / next position fix.
+ */
+
 export type TrackingState =
   | "idle"
   | "disabled"
@@ -144,11 +165,15 @@ export function useDriverBackgroundTracker(): DriverTrackerStatus {
 
       const timestamp = new Date(now).toISOString();
 
+      // One truck can carry several shipments; each gets the same fix.
       for (const shipmentId of shipmentIdsKey.split(",")) {
+        // 1) Realtime socket emit (best-effort, fire and forget).
         if (socket?.connected) {
           updateShipmentLocation(shipmentId, [coords.lat, coords.lng], timestamp);
         }
 
+        // 2) Authoritative persistence over REST. Skipped while offline: the
+        //    next fix after reconnecting is sent as usual.
         if (navigator.onLine) {
           try {
             await axiosAuth.patch(`/api/v1/shipments/${shipmentId}/location`, {
@@ -182,6 +207,7 @@ export function useDriverBackgroundTracker(): DriverTrackerStatus {
       const coords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
       setLastFixAt(Date.now());
       setLastCoords(coords);
+      // First fix of the session is force-sent.
       const force = lastSentCoordsRef.current == null;
       void sendCoordinates(coords, force);
     };
@@ -231,6 +257,11 @@ export function useDriverBackgroundTracker(): DriverTrackerStatus {
     return () => document.removeEventListener("visibilitychange", handle);
   }, [shouldTrack, sendFreshFix]);
 
+  // ---------- ...and when a shipment joins while already tracking ----------
+  // The driver just tapped "Going to pickup" with another shipment on the road:
+  // its parties are waiting for the truck, so don't make them wait for the
+  // movement / silence throttle. (A first shipment needs nothing: the
+  // watcher's first fix is force-sent.)
   const trackedIdsRef = useRef("");
   useEffect(() => {
     if (!shouldTrack) {

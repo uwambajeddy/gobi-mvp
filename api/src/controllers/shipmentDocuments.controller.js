@@ -63,6 +63,7 @@ export const uploadDocument = catchAsync(async (req, res, next) => {
 
   const uploadFields = {
     fileName,
+    // The stored file is private; clients view it through GET /documents/:docId/file.
     fileUrl: null,
     fileKey: stored.key,
     fileResourceType: stored.resourceType,

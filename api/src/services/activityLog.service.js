@@ -25,6 +25,7 @@ export const logActivity = async ({
       ipAddress: req?.ip,
     });
   } catch (error) {
+    // Audit failures must never break the business action itself.
     console.error("Failed to write activity log:", error.message);
   }
 };

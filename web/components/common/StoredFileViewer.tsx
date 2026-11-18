@@ -30,6 +30,7 @@ export function StoredFileViewer({
   const { data: link, isLoading, isError, error } = useQuery({
     queryKey: ["stored-file", ...cacheKey],
     enabled,
+    // Signed links last five minutes; refresh before they lapse.
     staleTime: 4 * 60 * 1000,
     gcTime: 4 * 60 * 1000,
     retry: false,
@@ -72,6 +73,7 @@ export function StoredFileViewer({
           {message}
         </Callout>
       ) : isImage ? (
+        // A short-lived signed URL: not something to route through the image optimizer.
         // eslint-disable-next-line @next/next/no-img-element
         <img
           src={link.url}

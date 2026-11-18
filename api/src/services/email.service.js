@@ -1,3 +1,16 @@
+/**
+ * Transactional email through Brevo's HTTP API (no SDK needed).
+ *
+ * - Tests never send: messages go to an in-memory outbox instead.
+ * - EMAIL_REDIRECT_TO sends every message to one inbox (useful for demos,
+ *   where the seeded accounts' addresses cannot receive mail).
+ * - Without BREVO_API_KEY and BREVO_SENDER_EMAIL, or with EMAIL_ENABLED=false,
+ *   sending is skipped.
+ *
+ * Callers should not await delivery for the user's request; failures are
+ * logged and never surface as API errors.
+ */
+
 const BREVO_URL = "https://api.brevo.com/v3/smtp/email";
 
 export const testOutbox = [];

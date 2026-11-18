@@ -71,6 +71,9 @@ import {
 
 const router = express.Router();
 
+// Every route below `:id` is guarded by `authorizeShipment(action)`, which
+// applies config/shipmentPolicies: after JSON body validation, and before
+// file parsing on upload routes.
 const withRelations = { include: shipmentIncludes };
 const fromDocument = { from: "document" };
 const fromPayment = { from: "payment" };
@@ -118,6 +121,7 @@ router.post(
 router.post("/:id/approve-quote", authorizeShipment("approveQuote", withRelations), approveQuote);
 
 router.get("/:id/documents", authorizeShipment("listDocuments"), listDocuments);
+// Upload routes authorize first, so a refused caller's file is never read.
 router.post(
   "/:id/documents",
   authorizeShipment("uploadDocument"),

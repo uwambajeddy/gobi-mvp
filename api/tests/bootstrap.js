@@ -1,3 +1,14 @@
+/**
+ * Test Bootstrap: Environment Setup
+ * Loaded via mocha --require BEFORE @babel/register.
+ * Must be plain CommonJS (no import/export).
+ *
+ * Purpose:
+ *   1. Force NODE_ENV=test
+ *   2. Load .env.test (overriding any .env values)
+ *   3. Ensure required env vars have safe defaults
+ */
+
 process.env.NODE_ENV = "test";
 
 const path = require("path");

@@ -17,6 +17,9 @@ function Providers({ children }: { children: React.ReactNode }) {
   );
 
   return (
+    // Re-check the session every minute so the 15-minute access token is
+    // refreshed before it expires, even on a page left open (the live
+    // tracking map polls the API and its socket reconnects with the token).
     <SessionProvider refetchInterval={60}>
       <SocketProvider socketUrl={process.env.NEXT_PUBLIC_API_URL!}>
         <QueryClientProvider client={client}>

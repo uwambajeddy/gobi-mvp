@@ -118,6 +118,9 @@ export const addMember = catchAsync(async (req, res, next) => {
     return next(new AppError("This user is already a member of the organization.", conflict));
   }
 
+  // A licence approval belongs to the person, so nobody becomes a carrier's
+  // driver without accepting: otherwise a carrier could enrol another
+  // carrier's approved driver and pass the compliance gate under their name.
   if (!user || role === "driver") {
     const { invitation, token, resent } = await createOrRefreshInvitation({
       organizationId,
@@ -187,6 +190,7 @@ export const updateMemberRole = catchAsync(async (req, res, next) => {
   if (!member) {
     return next(new AppError("Member not found.", notFound));
   }
+  // Becoming a driver needs the person's own acceptance (see addMember).
   if (req.body.role === "driver" && member.role !== "driver") {
     return next(
       new AppError(

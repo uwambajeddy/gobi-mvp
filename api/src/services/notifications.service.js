@@ -2,6 +2,14 @@ import db from "../database/models";
 import { emailMode, sendEmail } from "./email.service";
 import { appUrl, renderEmail } from "../utils/emailTemplate";
 
+/**
+ * Email notifications for the hand-offs in a shipment's life, plus a few
+ * account events. Each rule says who has to act next and tells only them.
+ *
+ * Notifications run in the background: they never delay or fail the action
+ * that triggered them, and the person who acted is never emailed about it.
+ */
+
 const {
   shipments,
   organizations,

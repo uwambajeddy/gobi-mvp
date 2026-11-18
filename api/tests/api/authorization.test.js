@@ -14,6 +14,13 @@ import { createOrRefreshInvitation } from "../../src/services/invitations.servic
 import { testOutbox } from "../../src/services/email.service";
 import { flushNotifications } from "../../src/services/notifications.service";
 
+/**
+ * Regression tests for the role and relationship rules in
+ * src/config/shipmentPolicies.js and the organization role guards
+ * (audit findings F-01, F-02, F-03, F-04). Each rule is checked from
+ * both sides: the people it lets in and the people it keeps out.
+ */
+
 const S = (id) => `/api/v1/shipments/${id}`;
 
 const createOrg = async (companyType) => {

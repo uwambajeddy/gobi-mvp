@@ -1,3 +1,12 @@
+/**
+ * Compliance Gate, adapted from the commercial dispatchGate.service.
+ *
+ * Evaluated before a vehicle + driver can be assigned to a shipment.
+ * Hard failures block the assignment (unless explicitly overridden with an
+ * audited reason); warnings never block.
+ */
+
+/** EAC corridor hard limit; beyond this the load must be split. */
 export const GVW_LIMIT_KG = 56000;
 
 const startOfToday = () => {

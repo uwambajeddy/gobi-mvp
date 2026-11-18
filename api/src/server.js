@@ -21,6 +21,7 @@ const server = app.listen(port, () => {
   logger.warn(`\nServer running at http://localhost:${port}\n`);
 });
 
+// Same origins as the REST API (cors() in middlewares/index.js allows any)
 const io = new Server(server, {
   cors: {
     origin: "*",

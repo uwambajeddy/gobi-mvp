@@ -3,6 +3,7 @@ import CredentialsProvider from "next-auth/providers/credentials";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
+/** Access tokens live 15 minutes on the API; refresh one minute early. */
 const ACCESS_TOKEN_LIFETIME_MS = 14 * 60 * 1000;
 
 async function refreshAccessToken(token: any) {
@@ -36,6 +37,8 @@ export const authOptions: AuthOptions = {
         email: { label: "Email", type: "text" },
         password: { label: "Password", type: "password" },
       },
+      // Sign-in only. Accounts are created by the sign-up page once the email
+      // is verified (POST /auth/register, then /auth/verify-email).
       async authorize(credentials) {
         const res = await fetch(`${API_URL}/api/v1/auth/login`, {
           method: "POST",

@@ -1,4 +1,18 @@
 "use strict";
+/**
+ * Who may perform each shipment action, and in which statuses.
+ *
+ * `actors` names the access flags computed by `getShipmentAccess`
+ * (services/shipmentAccess.service.js); any one of them is enough.
+ * `stages` lists the statuses the action may run in; omitted means any.
+ * `when`, if set, is a further check on the shipment, refused like a wrong stage.
+ * `denied` / `wrongStage` are the messages returned with 403 / 400.
+ *
+ * Enforced by the `authorizeShipment` middleware on every shipment route,
+ * and returned to the web app as `access.can` so the UI mirrors the API.
+ *
+ * CommonJS so both sequelize-cli (plain node) and the Babel app can load it.
+ */
 
 const { CANCELLABLE_STATUSES, OPEN_STATUSES } = require("./shipmentLifecycle");
 
@@ -8,10 +22,19 @@ const PARTY = ["isAdmin", "isShipper", "isCarrier", "isAgent", "isAssignedDriver
 
 const OPERATIONAL_PARTY = ["isShipper", "isCarrier", "isAgent", "isAssignedDriver"];
 
+/**
+ * Who may see money: quotes, payment amounts and proofs. The assigned
+ * driver is deliberately absent; a driver needs the route, not the price.
+ */
 const FINANCIAL_VIEWERS = ["isAdmin", "isShipper", "isCarrier", "isAgent"];
 
 const OPERATIONAL_STATUSES = ["execution_assigned", "in_transit", "arrived", "delivered"];
 
+/**
+ * Live driver tracking runs from "Going to pickup" until arrival
+ * (arrived_destination): before pickup only once the driver has set off,
+ * which stamps `startTime` (see isTrackingActive).
+ */
 const TRACKING_STATUSES = ["execution_assigned", "in_transit"];
 
 const isTrackingActive = (shipment) =>
@@ -126,6 +149,7 @@ const SHIPMENT_POLICIES = {
   },
 
   viewTracking: { actors: PARTY, denied: NOT_A_PARTY },
+  // Checked on the REST endpoint and on the `newCoordinates` socket event.
   updateLocation: {
     actors: ["isAssignedDriver"],
     stages: TRACKING_STATUSES,
@@ -154,6 +178,8 @@ const SHIPMENT_POLICIES = {
     denied: "Only carrier or clearing-agent coordinators can record payments.",
     wrongStage: closedShipment("Payments can't be recorded"),
   },
+  // Settling stays open after closure: a fee incurred before completion or
+  // cancellation may still be paid, and its proof filed, afterwards.
   markPaymentPaid: {
     actors: ["isCarrierCoordinator", "isAgentCoordinator"],
     denied: "Only carrier or clearing-agent coordinators can settle payments.",

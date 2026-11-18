@@ -1,5 +1,14 @@
 import { recordSystemEvent } from "./shipmentEvents.service";
 
+/**
+ * Document Gate, adapted from the commercial dispatchGate.service.
+ *
+ * A mandatory document satisfies the gate when it has been uploaded or
+ * verified AND is not expired. Rejected documents count as missing, which is
+ * what lets a rejection regress a shipment from `documents_complete` back to
+ * `awaiting_documents`.
+ */
+
 const startOfToday = () => {
   const now = new Date();
   return new Date(now.getFullYear(), now.getMonth(), now.getDate());

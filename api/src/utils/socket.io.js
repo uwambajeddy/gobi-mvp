@@ -10,6 +10,11 @@ const { shipments, organization_members } = db;
 
 let ioInstance = null;
 
+/**
+ * Connected clients: user id -> socket id.
+ * The commercial platform keeps this in a Redis hash ("connectedClients");
+ * the MVP runs a single API process, so an in-memory Map does the same job.
+ */
 const connectedClients = new Map();
 
 export function initializeSocketIO(io) {
@@ -83,6 +88,7 @@ export function shipmentLiveServices(client) {
         throw new Error(`Shipment ${shipmentId} not found.`);
       }
 
+      // Only the assigned driver, while the shipment is in transit (config/shipmentPolicies)
       const access = getShipmentAccess(shipment, { user: client.userInfo });
       const denied = checkShipmentPolicy("updateLocation", shipment, access);
       if (denied) throw denied;
@@ -95,6 +101,9 @@ export function shipmentLiveServices(client) {
         { silent: true },
       );
 
+      // Emit updated coordinates to every party of the shipment.
+      // `lastLocationUpdate` is the server's clock, which viewers use to order
+      // updates (the driver's own `timeStamp` is passed through as sent).
       await emitToShipmentParties(shipment, "newCoordinates", {
         data: {
           shipmentId: shipment.id,
@@ -118,6 +127,8 @@ export function shipmentLiveServices(client) {
   client.on("disconnect", () => {
     const userId = `${client.userInfo.id}`;
     logger.error(`Client disconnected: ${userId} ❌`);
+    // Only forget the user if this is still their socket: a newer tab may
+    // already have replaced it.
     if (connectedClients.get(userId) === client.id) {
       connectedClients.delete(userId);
     }

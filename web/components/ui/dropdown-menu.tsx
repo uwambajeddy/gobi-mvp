@@ -14,6 +14,12 @@ export interface MenuItem {
 
 const GAP = 8;
 
+/**
+ * Minimal menu button (WAI-ARIA menu pattern): Enter/Space/ArrowDown opens,
+ * arrows move between items, Escape or an outside click closes and returns
+ * focus to the trigger. The menu renders in a portal with fixed positioning,
+ * so containers that clip (the sidebar) or stack above it can't hide it.
+ */
 export function DropdownMenu({
   trigger,
   triggerLabel,
@@ -81,6 +87,7 @@ export function DropdownMenu({
     const index = nodes.indexOf(document.activeElement as HTMLButtonElement);
     if (event.key === "Escape") {
       event.preventDefault();
+      // Keep Escape from also closing an enclosing drawer.
       event.stopPropagation();
       close();
     } else if (event.key === "ArrowDown") {

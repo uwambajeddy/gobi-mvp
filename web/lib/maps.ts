@@ -1,3 +1,15 @@
+/**
+ * Google Maps Platform helpers.
+ *
+ * Gobi stores places as free text (origin, destination, milestone location),
+ * so the map resolves them on the fly:
+ *  - Places API (New) text search turns text into coordinates + country;
+ *  - Routes API returns the planned driving route between two points.
+ * Both are called from the browser with the public key; restrict that key by
+ * HTTP referrer in Google Cloud. Coordinates are cached locally for at most
+ * 30 days (the limit Google's terms allow); routes are kept in memory only.
+ */
+
 export const GOOGLE_MAPS_API_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ?? "";
 export const GOOGLE_MAPS_MAP_ID = process.env.NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID || "DEMO_MAP_ID";
 export const mapsEnabled = GOOGLE_MAPS_API_KEY.length > 0;

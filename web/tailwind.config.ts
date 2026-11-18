@@ -1,6 +1,14 @@
 import type { Config } from "tailwindcss";
 import colors from "tailwindcss/colors";
 
+/**
+ * Gobi design tokens.
+ *
+ * Neutrals and semantic colours are CSS variables (see app/globals.css) so a
+ * future theme only has to redefine the variables. Every text/background pair
+ * below was checked for WCAG AA contrast; brand-500 is reserved for icons,
+ * marks and active indicators (3.0:1), while actions use primary-600 (4.7:1).
+ */
 const token = (name: string) => `rgb(var(--${name}) / <alpha-value>)`;
 
 const config: Config = {

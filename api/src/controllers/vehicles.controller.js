@@ -91,6 +91,8 @@ export const deleteVehicle = catchAsync(async (req, res, next) => {
   const vehicle = await findOwnVehicle(req, next);
   if (!vehicle) return;
 
+  // Deleting clears `assignedVehicleId` (ON DELETE SET NULL), so a vehicle stays
+  // while an open shipment depends on it. Closed shipments keep their timeline.
   const active = await shipments.findAll({
     where: { assignedVehicleId: vehicle.id, status: OPEN_STATUSES },
     attributes: ["reference"],

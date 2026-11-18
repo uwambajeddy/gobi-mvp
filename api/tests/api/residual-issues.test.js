@@ -4,10 +4,21 @@ import { asUser, loginAs, registerUser, PERSONAS, SEED } from "../helpers/auth.h
 import { driveShipmentTo } from "../helpers/shipment.helper";
 import db from "../../src/database/models";
 
+/**
+ * Regression tests for the residual audit items: raw document links in API
+ * responses, deleting a vehicle that an open shipment uses, and the conflict
+ * (409) path of the quote guards.
+ */
+
 const S = (id) => `/api/v1/shipments/${id}`;
 
 const SEEDED_SHIPMENT = 1;
 
+/**
+ * Runs `request` with one competing write applied just before the first
+ * guarded shipment UPDATE that `before` matches, as if another user acted
+ * between the handler's read and its write.
+ */
 const withCompetingWrite = async ({ shipmentId, before, write }, request) => {
   const { update } = db.shipments;
   let pending = true;

@@ -18,6 +18,11 @@ interface SocketProviderProps {
 
 const SocketContext = createContext<SocketContextType | undefined>(undefined);
 
+/**
+ * One authenticated Socket.IO connection per signed-in browser tab.
+ * The API checks the access token on connect (protectSocket), so the socket
+ * is re-created whenever NextAuth hands out a fresh access token.
+ */
 export const SocketProvider: React.FC<SocketProviderProps> = ({ children, socketUrl }) => {
   const [socket, setSocket] = useState<Socket | null>(null);
   const [connected, setConnected] = useState(false);
@@ -55,6 +60,7 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children, socket
         setConnected(false);
       });
 
+      // Reconnection events live on the manager (`socket.io`) in socket.io-client v4.
       newSocket.io.on("reconnect_attempt", () => {
         console.log("Attempting to reconnect");
       });
@@ -72,6 +78,8 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children, socket
     const newSocket = connectSocket(accessToken);
 
     return () => {
+      // Disconnect the socket this effect created (not the one in state,
+      // which may still be null if it never connected).
       newSocket?.disconnect();
       setSocket(null);
       setConnected(false);

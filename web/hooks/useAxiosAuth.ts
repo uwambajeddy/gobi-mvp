@@ -4,6 +4,11 @@ import { useEffect } from "react";
 import { getSession, signIn, useSession } from "next-auth/react";
 import axiosAuth from "@/lib/axios";
 
+/**
+ * Returns the shared Axios instance with the session access token attached.
+ * NextAuth's jwt callback keeps the access token fresh (refresh-token flow),
+ * so a 401 here means the session is truly gone → redirect to sign-in.
+ */
 const useAxiosAuth = () => {
   const { data: session } = useSession();
 
@@ -11,6 +16,8 @@ const useAxiosAuth = () => {
     const requestIntercept = axiosAuth.interceptors.request.use(
       async (config) => {
         if (!config.headers["Authorization"]) {
+          // On a full page load queries can fire while useSession() is still
+          // loading; wait for the session instead of sending an anonymous request.
           const accessToken =
             session?.tokens?.accessToken ?? (await getSession())?.tokens?.accessToken;
           if (accessToken) {

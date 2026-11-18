@@ -1,4 +1,11 @@
 "use strict";
+/**
+ * Shipments whose driver recorded "En route to pickup" before `startTime`
+ * existed: stamp the trip start from that event, so the driver's progress
+ * card, live tracking and the API's "already recorded" check all agree.
+ *
+ * @type {import('sequelize-cli').Migration}
+ */
 module.exports = {
   async up(queryInterface) {
     await queryInterface.sequelize.query(`

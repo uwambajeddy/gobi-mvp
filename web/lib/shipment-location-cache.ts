@@ -29,6 +29,10 @@ export function readShipmentLocation(id: string | number | null | undefined): Ca
   return null;
 }
 
+/**
+ * Write only when `next` is strictly newer than what's cached.
+ * Returns the value that ended up cached (incoming OR existing).
+ */
 export function writeShipmentLocation(id: string | number, next: CachedShipmentLocation): CachedShipmentLocation {
   if (typeof window === "undefined") return next;
   const existing = readShipmentLocation(id);

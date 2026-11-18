@@ -14,6 +14,10 @@ const SHIPMENT_STATUSES = [
   "cancelled",
 ];
 
+/**
+ * Allowed forward transitions. Document-gate syncing may also move a shipment
+ * between `awaiting_documents` and `documents_complete` in both directions.
+ */
 const ALLOWED_TRANSITIONS = {
   draft: ["submitted", "cancelled"],
   submitted: ["quote_approved", "cancelled"],

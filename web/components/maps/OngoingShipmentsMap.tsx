@@ -179,6 +179,7 @@ function DetailsCard({
             />
           )}
         </div>
+        {/* The API leaves the quote out (undefined, not null) for callers who may not see it. */}
         {shipment.quoteAmount !== undefined && (
           <div className="min-w-0">
             <dt className="text-overline text-ink-muted">Quote</dt>
@@ -352,6 +353,7 @@ export function OngoingShipmentsMap({
                 fitPadding={isWide ? { top: 56, right: 64, bottom: 270, left: 56 } : undefined}
                 className="h-[24rem] md:h-[34rem]"
               />
+              {/* Sits above the Google logo and attribution, which must stay visible. */}
               <DetailsCard
                 shipment={selected}
                 geo={geo}

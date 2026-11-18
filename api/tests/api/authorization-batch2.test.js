@@ -4,8 +4,16 @@ import { createShipment, driveShipmentTo } from "../helpers/shipment.helper";
 import { SAMPLE_PDF, SAMPLE_TEXT, pdfFile } from "../helpers/files.helper";
 import { enrollDriver } from "../helpers/organization.helper";
 
+/**
+ * Regression tests for audit items R-7 (uploads are authorized before the
+ * file is read), F-05 (assignment preview stays inside the carrier's fleet),
+ * Q-2 (drivers see no quotes or payments) and F-06 (a carrier change clears
+ * the previous carrier's quote).
+ */
+
 const S = (id) => `/api/v1/shipments/${id}`;
 
+/** Bigger than the 10 MB limit: multer would refuse it with 400 if it ever read it. */
 const oversizedPdf = () => ({
   buffer: Buffer.concat([SAMPLE_PDF, Buffer.alloc(10 * 1024 * 1024)]),
   name: "huge.pdf",

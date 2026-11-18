@@ -22,6 +22,10 @@ export interface NavGroup {
   items: NavItem[];
 }
 
+/**
+ * Role-aware navigation. This only decides which links are shown; the API
+ * enforces every permission independently.
+ */
 export const buildNav = (
   userType: string | undefined,
   companyType: string | undefined,

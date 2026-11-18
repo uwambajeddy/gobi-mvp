@@ -40,6 +40,16 @@ const MANUAL_EVENT_TYPES = [
 
 const EVENT_TYPES = [...SYSTEM_EVENT_TYPES, ...MANUAL_EVENT_TYPES];
 
+/**
+ * The driver's progress milestones, in order: one button each on the driver's
+ * screen. Same flow as the commercial driver app (Start delivery, Mark picked
+ * up, Mark arrived, then Submit POD), with an "arrived at pickup" check-in.
+ * Proof of delivery (POST /:id/pod) is the last step.
+ *
+ * `from` lists the statuses the milestone may be recorded in; `to`, when set,
+ * is the status it moves the shipment to. Each is recorded once per shipment.
+ * Everything else is pure timeline data.
+ */
 const DRIVER_MILESTONES = {
   en_route_to_pickup: { from: ["execution_assigned"] },
   arrived_pickup: { from: ["execution_assigned"] },

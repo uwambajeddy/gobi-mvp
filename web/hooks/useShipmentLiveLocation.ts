@@ -20,6 +20,7 @@ interface UseShipmentLiveLocationOptions {
   disconnectedPollMs?: number;
 }
 
+/** A parked truck still reports every MAX_SILENT_INTERVAL, so only flag silence beyond that. */
 const STALE_AFTER_MS = TRACKING_CONFIG.MAX_SILENT_INTERVAL_MS + 30_000;
 
 export function useShipmentLiveLocation({
@@ -52,6 +53,9 @@ export function useShipmentLiveLocation({
     setLocation(readShipmentLocation(shipmentId));
   }, [shipmentId]);
 
+  // Accept and persist a new candidate location. Only writes when the
+  // incoming update is newer than what we already have; the staleness flag
+  // follows the kept location's age (below), so an old repeat can't reset it.
   const accept = useCallback(
     (next: LatestLocation) => {
       if (!mountedRef.current || shipmentId == null) return;
@@ -104,6 +108,8 @@ export function useShipmentLiveLocation({
       if (!Array.isArray(coords) || coords.length < 2) return;
       const [lat, lng] = coords;
       if (typeof lat !== "number" || typeof lng !== "number") return;
+      // Ordered by the server's clock (the same field the REST endpoint
+      // returns), so a phone with a wrong clock can't hold back newer fixes.
       const ts = toEpoch(payload?.data?.lastLocationUpdate ?? payload?.data?.timeStamp);
       accept({ lat, lng, updatedAt: ts });
     };

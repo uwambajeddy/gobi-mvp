@@ -22,6 +22,7 @@ export const registerSchema = Joi.object({
     .pattern(/^\+?[0-9]{9,15}$/)
     .messages({ "string.pattern.base": "phoneNumber must be a valid phone number" }),
   password: Joi.string().min(8).max(72).required(),
+  // From an emailed invitation link; proves the inbox, so no code is needed.
   inviteToken: Joi.string().trim().hex().length(64),
 });
 

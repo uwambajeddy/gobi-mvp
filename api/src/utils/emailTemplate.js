@@ -18,9 +18,15 @@ export const escapeHtml = (value) =>
 export const appUrl = (path = "/dashboard") =>
   `${(process.env.WEB_APP_URL || "http://localhost:3000").replace(/\/+$/, "")}${path}`;
 
+/**
+ * Absolute URL of a file in the web app's public folder. Mail clients fetch
+ * images from the internet, so EMAIL_ASSET_URL can point at a public host
+ * while WEB_APP_URL is still localhost.
+ */
 const assetUrl = (path) =>
   `${(process.env.EMAIL_ASSET_URL || process.env.WEB_APP_URL || "http://localhost:3000").replace(/\/+$/, "")}${path}`;
 
+// PNG, not SVG: Gmail and Outlook do not render SVG images. Drawn at 3x.
 const LOGO = { path: "/brand/logo-email.png", width: 68, height: 32 };
 
 export const renderEmail = ({ heading, paragraphs = [], code, details = [], cta, footnote }) => {

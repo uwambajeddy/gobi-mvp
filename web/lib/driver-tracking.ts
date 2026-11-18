@@ -1,6 +1,9 @@
 export const TRACKING_CONFIG = {
+  /** Minimum ms between two successful sends. */
   MIN_SEND_INTERVAL_MS: 10_000,
+  /** Force a send after this much time even if driver is stationary. */
   MAX_SILENT_INTERVAL_MS: 120_000,
+  /** Minimum distance (metres) moved to trigger a non-forced send. */
   MIN_MOVEMENT_METERS: 20,
   WATCH_OPTIONS: {
     enableHighAccuracy: true,

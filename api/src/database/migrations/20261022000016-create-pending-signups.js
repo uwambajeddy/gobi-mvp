@@ -1,4 +1,12 @@
 "use strict";
+/**
+ * Sign-ups waiting for their email to be verified. The account (a `users`
+ * row) is only created once the emailed code is entered, so nobody can hold
+ * an address they don't control. `handle` identifies the sign-up in the
+ * browser that started it; the code itself is stored only as a bcrypt hash.
+ *
+ * @type {import('sequelize-cli').Migration}
+ */
 module.exports = {
   async up(queryInterface, Sequelize) {
     await queryInterface.createTable("pending_signups", {

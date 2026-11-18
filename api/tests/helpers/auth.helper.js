@@ -6,6 +6,19 @@ import { flushNotifications } from "../../src/services/notifications.service";
 
 chai.use(chaiHttp);
 
+/**
+ * Seeded personas (see src/database/seeders):
+ *  - admin@gobi.rw        platform admin
+ *  - shipper@gobi.rw      owner of Kigali Distribution (org 1, distribution)
+ *  - carrier@gobi.rw      owner of TransAfrica Logistics (org 2, transport)
+ *  - coordinator@gobi.rw  coordinator at TransAfrica (org 2)
+ *  - driver@gobi.rw       driver at TransAfrica (user 5, licence valid)
+ *  - driver2@gobi.rw      driver at TransAfrica (user 6, licence EXPIRED)
+ *  - agent@gobi.rw        owner of ClearFast Agencies (org 3, clearing_agent)
+ *
+ * Seeded fleet (org 2): vehicle 1 compliant truck (30t), vehicle 2 insurance
+ * EXPIRED, vehicle 3 van without a COMESA Yellow Card.
+ */
 export const PERSONAS = {
   ADMIN: "admin@gobi.rw",
   SHIPPER: "shipper@gobi.rw",
